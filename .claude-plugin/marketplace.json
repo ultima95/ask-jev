@@ -1,0 +1,11 @@
+{
+  "name": "jev-ask",
+  "owner": { "name": "Silentium" },
+  "plugins": [
+    {
+      "name": "jev-ask",
+      "source": "./",
+      "description": "Ask Jev before asking you — auto-answers AskUserQuestion when the answer is determinable from context."
+    }
+  ]
+}
