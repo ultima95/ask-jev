@@ -17,12 +17,8 @@ Câu nào thuộc về bạn thì vẫn tới bạn.
 
 ## Cài
 
-```bash
-git clone <repo> ~/workspace/jev-ask
 ```
-
-```
-/plugin marketplace add ~/workspace/jev-ask
+/plugin marketplace add yanmad27/jev-ask
 /plugin install jev-ask@jev-ask
 ```
 
@@ -66,6 +62,15 @@ việc không hoàn tác được, kể cả khi `pick` rất chắc.
 | `JEV_ASK_THRESHOLD` | `0.8` | hạ xuống = tự quyết nhiều hơn, sai nhiều hơn |
 | `JEV_MODEL` | `typesafe-ai/jev` | |
 | `JEV_GATEWAY_URL` | endpoint đánh giá của Vercel | |
+
+## Sửa plugin
+
+Máy đang phát triển thì trỏ marketplace vào thư mục làm việc thay vì GitHub, để
+sửa xong là chạy luôn, không phải push rồi update:
+
+```
+/plugin marketplace add ~/workspace/jev-ask
+```
 
 ## Ghi chú kỹ thuật
 
