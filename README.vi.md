@@ -1,8 +1,15 @@
 <p align="center"><img src="./assets/logo.jpg" alt="ask-jev logo" width="200"></p>
 
-# ask-jev
+<h1 align="center">ask-jev</h1>
 
-[English](./README.md) · **Tiếng Việt**
+<p align="center">
+  <img alt="version" src="https://img.shields.io/badge/version-0.1.0-2dd4bf?style=flat-square">
+  <img alt="Claude Code plugin" src="https://img.shields.io/badge/Claude%20Code-plugin-1abc9c?style=flat-square">
+  <img alt="dependencies" src="https://img.shields.io/badge/dependencies-none-2dd4bf?style=flat-square">
+  <img alt="node" src="https://img.shields.io/badge/node-%3E%3D18-1abc9c?style=flat-square">
+</p>
+
+<p align="center"><a href="./README.md">English</a> · <strong>Tiếng Việt</strong></p>
 
 Hỏi [Jev](https://typesafe.ai) trước khi hỏi bạn.
 
