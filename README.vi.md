@@ -184,6 +184,10 @@ GitHub, để sửa xong là chạy luôn, không phải push rồi update:
 /plugin marketplace add ~/workspace/ask-jev
 ```
 
+Commit theo [Conventional Commits](https://www.conventionalcommits.org)
+(`feat:`/`fix:`/`docs:`…) — release-please tự mở PR release, tự tăng version
+trong `plugin.json` và gắn tag khi merge, không cần tag tay.
+
 ## Ghi chú triển khai
 
 <details>

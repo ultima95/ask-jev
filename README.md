@@ -188,6 +188,10 @@ instead of GitHub, so edits apply immediately with no push-then-update cycle:
 /plugin marketplace add ~/workspace/ask-jev
 ```
 
+Commits follow [Conventional Commits](https://www.conventionalcommits.org)
+(`feat:`/`fix:`/`docs:`…) — release-please opens a release PR that bumps
+`plugin.json` and tags on merge, so there's no manual tagging.
+
 ## Implementation notes
 
 <details>
