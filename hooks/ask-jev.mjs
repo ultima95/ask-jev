@@ -20,13 +20,25 @@ const CONTEXT_TURNS = 12;
 const CONTEXT_CHARS = 6_000;
 
 /**
- * Hai câu hỏi, không phải một. `pick` nói phương án nào đúng; `personal` nói câu
- * hỏi này có được phép tự quyết hay không.
+ * Câu hỏi `personal` dùng chung cho cả single-pick lẫn multiSelect: câu hỏi này
+ * có được phép tự quyết hay không.
  *
- * Thiếu `personal`, Jev sẽ tự tin chọn giúp bạn cả tông màu thương hiệu lẫn việc
- * xoá thư mục — sai không phải về sự thật mà về thẩm quyền. Ranh giới đó phải do
+ * Thiếu nó, Jev sẽ tự tin chọn giúp bạn cả tông màu thương hiệu lẫn việc xoá
+ * thư mục — sai không phải về sự thật mà về thẩm quyền. Ranh giới đó phải do
  * chính nó nhận ra, vì chỉ nó đọc được câu hỏi.
  */
+const PERSONAL_QUESTION = {
+  type: "boolean",
+  instructions: {
+    question: "Is `pendingQuestion` something only the user has standing to answer?",
+    focus: "A matter of personal taste, aesthetics, private priorities, or an irreversible consequence.",
+  },
+  criteria: {
+    true: "Personal preference, aesthetic choice, a trade-off that depends on private goals, or deleting/sending/publishing something that cannot be undone",
+    false: "There is a correct answer derivable from `conversationContext`, established convention, or technical fact",
+  },
+};
+
 async function decide(key, { question, options, context }) {
   if (options.length < 2) return null;
 
@@ -59,17 +71,7 @@ async function decide(key, { question, options, context }) {
         },
         criteria,
       },
-      personal: {
-        type: "boolean",
-        instructions: {
-          question: "Is `pendingQuestion` something only the user has standing to answer?",
-          focus: "A matter of personal taste, aesthetics, private priorities, or an irreversible consequence.",
-        },
-        criteria: {
-          true: "Personal preference, aesthetic choice, a trade-off that depends on private goals, or deleting/sending/publishing something that cannot be undone",
-          false: "There is a correct answer derivable from `conversationContext`, established convention, or technical fact",
-        },
-      },
+      personal: PERSONAL_QUESTION,
     },
   );
 
@@ -78,6 +80,52 @@ async function decide(key, { question, options, context }) {
   if (confidence < THRESHOLD) return null;
 
   return { label: options[Number.parseInt(answers.pick.choice.slice(1), 10)]?.label, confidence };
+}
+
+/**
+ * multiSelect: không có một "phương án đúng" duy nhất, nên mỗi option là một câu
+ * hỏi boolean riêng — có áp dụng hay không. Chỉ giải quyết khi MỌI option đều dứt
+ * khoát (>= THRESHOLD hoặc <= 1-THRESHOLD); còn một option lửng lơ ở giữa thì cả
+ * câu hỏi coi như chưa giải quyết được, để người quyết.
+ */
+async function decideMulti(key, { question, options, context }) {
+  if (options.length < 2) return null;
+
+  const questions = { personal: PERSONAL_QUESTION };
+  options.forEach((o, i) => {
+    questions[`o${i}`] = {
+      type: "boolean",
+      instructions: {
+        question: `${question} — does this option apply?`,
+        focus: `Judge only whether "${o.label}" applies, independent of the other options.`,
+      },
+      criteria: {
+        true: `${o.label} — ${o.description}`,
+        false: `Does not apply: ${o.label} — ${o.description} is not the case`,
+      },
+    };
+  });
+
+  const answers = await askJev(key, { conversationContext: context, pendingQuestion: question }, questions);
+
+  if (answers.personal.probability > 0.5) return null;
+
+  const selected = [];
+  let confidence = 1;
+  for (let i = 0; i < options.length; i++) {
+    const p = answers[`o${i}`]?.probability;
+    if (p === undefined) return null;
+    if (p >= THRESHOLD) {
+      selected.push(options[i].label);
+      confidence = Math.min(confidence, p);
+    } else if (p <= 1 - THRESHOLD) {
+      confidence = Math.min(confidence, 1 - p);
+    } else {
+      return null;
+    }
+  }
+
+  return { label: selected.length > 0 ? selected.join(", ") : "none", confidence };
 }
 
 /** Vài lượt gần nhất. Bỏ lượt subagent và lượt máy sinh — chúng nói chuyện nội bộ. */
@@ -124,8 +172,6 @@ async function main() {
 
   const questions = input.tool_input?.questions;
   if (!Array.isArray(questions) || questions.length === 0) return;
-  // Chọn nhiều đáp án: một lựa chọn sai kéo theo cả chùm, để người quyết.
-  if (questions.some((q) => q.multiSelect)) return;
 
   // Jev chấm theo criteria; nhãn trần không có description thì không phải criterion.
   const missing = questions.flatMap((q) =>
@@ -155,26 +201,36 @@ async function main() {
   if (!context) return;
 
   const results = await Promise.all(
-    questions.map((q) =>
-      decide(key, { question: q.question, options: q.options ?? [], context }).catch(() => null),
-    ),
+    questions.map((q) => {
+      const fn = q.multiSelect ? decideMulti : decide;
+      return fn(key, { question: q.question, options: q.options ?? [], context }).catch(() => null);
+    }),
   );
 
-  // Tất cả hoặc không gì: trả lời nửa chừng thì model vẫn phải hỏi lại, mà người
-  // dùng đã mất một lựa chọn vào tay Jev.
-  if (results.some((r) => !r?.label)) return;
+  // Trả lời từng câu một, không phải tất-cả-hoặc-không-gì: câu nào Jev chắc thì
+  // dùng luôn, câu nào không thì bảo Claude chỉ hỏi lại đúng câu đó — người dùng
+  // không mất những lựa chọn Jev đã chắc chỉ vì một câu khác còn mập mờ.
+  const resolved = questions
+    .map((q, i) => (results[i]?.label ? { question: q.question, ...results[i] } : null))
+    .filter(Boolean);
+  if (resolved.length === 0) return;
 
-  const answer = questions
-    .map((q, i) => `"${q.question}" → ${results[i].label} (Jev: ${results[i].confidence.toFixed(2)})`)
+  const answered = resolved
+    .map((r) => `"${r.question}" → ${r.label} (Jev: ${r.confidence.toFixed(2)})`)
     .join("\n");
+  const unresolved = questions.filter((_, i) => !results[i]?.label).map((q) => `"${q.question}"`);
+
+  const reason = unresolved.length === 0
+    ? `Jev answered on the user's behalf from conversation context. Do NOT ask again — use these choices and continue:\n${answered}`
+    : `Jev answered some of these on the user's behalf from conversation context. Use these, do not re-ask them:\n` +
+      `${answered}\n\nRe-ask the user ONLY the unresolved question(s):\n${unresolved.join("\n")}`;
 
   process.stdout.write(JSON.stringify({
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
       permissionDecision: "deny",
-      permissionDecisionReason:
-        `Jev answered on the user's behalf from conversation context. Do NOT ask again — use these choices and continue:\n${answer}`,
-      systemMessage: `Jev answered: ${results.map((r) => r.label).join(", ")}`,
+      permissionDecisionReason: reason,
+      systemMessage: `Jev answered: ${resolved.map((r) => r.label).join(", ")}`,
     },
   }));
 }

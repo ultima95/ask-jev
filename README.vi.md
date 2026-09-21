@@ -3,8 +3,9 @@
 <h1 align="center">ask-jev</h1>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-0.1.0-2dd4bf?style=flat-square">
+  <img alt="version" src="https://img.shields.io/badge/version-0.2.0-2dd4bf?style=flat-square">
   <img alt="Claude Code plugin" src="https://img.shields.io/badge/Claude%20Code-plugin-1abc9c?style=flat-square">
+  <a href="https://github.com/yanmad27/ask-jev/actions/workflows/ci.yml"><img alt="ci" src="https://github.com/yanmad27/ask-jev/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="dependencies" src="https://img.shields.io/badge/dependencies-none-2dd4bf?style=flat-square">
   <img alt="node" src="https://img.shields.io/badge/node-%3E%3D18-1abc9c?style=flat-square">
 </p>
@@ -48,7 +49,18 @@ Câu nào thật sự thuộc về bạn thì vẫn tới tay bạn, y như cũ.
 Vậy là xong. **Không đặt khoá →** plugin nằm im, Claude Code hỏi bạn như bình
 thường. Không có gì bị ảnh hưởng.
 
-## Cách nó hoạt động
+## Nâng cấp
+
+```
+/plugin marketplace update ask-jev
+/plugin update ask-jev@ask-jev
+```
+
+File khoá được đổi tên `jev-ask.key` → `ask-jev.key`; tên cũ vẫn được đọc như
+phương án dự phòng, nên không cần chuyển gì cả. Khởi động lại Claude Code sau
+khi nâng cấp — hook chỉ nạp lại khi vào phiên mới.
+
+## 1. Tự trả lời `AskUserQuestion`
 
 Trước khi Claude Code hiện câu hỏi cho bạn, ask-jev gửi câu đó cho Jev để
 phán hai việc:
@@ -75,16 +87,79 @@ Thiếu description ở bất kỳ lựa chọn nào trong câu hỏi, ask-jev k
 luôn — nó trả câu hỏi ngược lại cho Claude kèm hướng dẫn hỏi lại với định
 nghĩa đầy đủ. Vòng đó không có gì tới tay bạn; Claude chỉ việc thử lại.
 
-## Khi nào bạn vẫn bị hỏi
+Bên dưới, mỗi lựa chọn được gửi dạng `{what, not_for}` — `not_for` nêu tên
+các lựa chọn anh em mà nó không được trùng, để các định nghĩa loại trừ nhau
+chứ không chỉ đứng cạnh nhau.
+
+### Nhiều câu hỏi, và multiSelect
+
+Nhiều câu hỏi trong cùng một lệnh `AskUserQuestion` được trả lời độc lập với
+nhau. Câu nào Jev chắc thì dùng luôn; câu nào không thì trả lại cho bạn — lý
+do đưa ngược cho Claude nêu tên các câu đã trả lời và nói chỉ hỏi lại những
+câu còn thiếu, để một câu trả lời chắc chắn không bị bỏ đi chỉ vì câu bên
+cạnh còn mập mờ.
+
+Câu hỏi `multiSelect` cũng qua Jev: mỗi lựa chọn thành một câu hỏi có/không
+riêng ("lựa chọn này có áp dụng không?") thay vì một câu chọn duy nhất. Một
+lựa chọn được chọn khi xác suất vượt `JEV_ASK_THRESHOLD`, bị loại khi xuống
+dưới `1 - JEV_ASK_THRESHOLD`, còn cả câu hỏi vẫn chưa giải quyết nếu có lựa
+chọn nằm lửng lơ ở giữa. Đáp án đã giải quyết là danh sách nhãn được chọn nối
+bằng dấu phẩy — có thể là "none".
+
+### Khi nào nó im lặng
 
 | Điều kiện | Vì sao |
 |---|---|
 | câu hỏi là chuyện riêng (`personal > 0.5`) | quyền của bạn, không phải của model |
 | Jev không đủ chắc (`< JEV_ASK_THRESHOLD`) | đoán mò thì thà hỏi còn hơn |
-| câu hỏi cho chọn nhiều đáp án (`multiSelect`) | một lựa chọn sai sẽ kéo theo cả chùm |
-| nhiều câu hỏi cùng lúc, chỉ vài câu chắc | trả lời nửa chừng vẫn phải hỏi lại, mà bạn đã mất một lựa chọn vào tay một cú đoán sai |
 | có lựa chọn thiếu description | nhãn trần không phải thứ Jev phán đoán được — trả về cho Claude, không đưa cho Jev |
+| transcript không có ngữ cảnh dùng được | không có gì cho Jev chấm |
 | không có khoá, Jev lỗi, hoặc quá 8 giây | một helper hỏng không bao giờ được phép là lý do bạn không trả lời được |
+
+## 2. Hỏi Jev trước khi tự quyết
+
+Một hook `SessionStart` nhắc luôn quy tắc hỏi Jev trước mọi quyết định —
+phân loại, chọn giữa các phương án cố định, có/không dựa trên bằng chứng,
+xếp hạng — chứ không chỉ khi `AskUserQuestion` được gọi. Hai hook chạy ở mỗi
+đầu phiên: `self-register.mjs`, vá bug của Claude Code khiến `PreToolUse`
+hook khai trong plugin không chạy (xem Ghi chú triển khai), và
+`session-start.mjs`, tiêm luật vào. Cả hai đều im lặng nếu chưa có khoá API.
+
+Không chỉ tự trả lời `AskUserQuestion`, Claude còn có thể hỏi Jev cho *bất kỳ*
+quyết định nào — phân loại, chọn phương án, có/không, chấm điểm — qua skill và
+CLI đi kèm:
+
+```
+echo '{"state": ..., "questions": ...}' | node "${CLAUDE_PLUGIN_ROOT}/bin/jev.mjs"
+```
+
+Request:
+
+```json
+{
+  "state": { "item": "Two beef patties, cheese, and pickles between a sesame bun." },
+  "questions": {
+    "isHamburger": {
+      "type": "boolean",
+      "instructions": { "question": "Does `item` match the definition of a hamburger?", "focus": "Judge the food itself, not what it's called." },
+      "criteria": {
+        "true": "A hot sandwich: a cooked ground-meat patty inside a sliced bun",
+        "false": "Anything else — a cold sandwich, a non-ground protein, no bun, or not a sandwich at all"
+      }
+    }
+  }
+}
+```
+
+Response:
+
+```json
+{ "isHamburger": { "probability": 0.97, "confidence": 0.95 } }
+```
+
+Skill (`skills/ask-jev/SKILL.md`) giải thích thế nào là một request tốt —
+bằng chứng dán nguyên vào `state`, mỗi câu hỏi một quyết định, tiêu chí quan
+sát được và loại trừ lẫn nhau — kèm ví dụ cụ thể.
 
 ## Cấu hình
 
@@ -99,20 +174,6 @@ Tất cả đều tuỳ chọn — mặc định đã hợp lý sẵn.
 
 File khoá cũ `~/.claude/jev-ask.key` (từ trước khi plugin đổi tên) vẫn được
 đọc như phương án dự phòng, nên không có gì hỏng nếu bạn từng đặt theo tên cũ.
-
-## Tự hỏi Jev
-
-Không chỉ tự trả lời `AskUserQuestion`, Claude còn có thể hỏi Jev cho *bất kỳ*
-quyết định nào — phân loại, chọn phương án, có/không, chấm điểm — qua skill và
-CLI đi kèm:
-
-```
-echo '{"state": ..., "questions": ...}' | node "${CLAUDE_PLUGIN_ROOT}/bin/jev.mjs"
-```
-
-Skill (`skills/ask-jev/SKILL.md`) giải thích thế nào là một request tốt —
-bằng chứng dán nguyên vào `state`, mỗi câu hỏi một quyết định, tiêu chí quan
-sát được và loại trừ lẫn nhau — kèm ví dụ cụ thể.
 
 ## Đóng góp / Sửa plugin
 
@@ -150,10 +211,6 @@ chạy mỗi `SessionStart`, tự ghi entry `PreToolUse` thẳng vào
 nhật lại đường dẫn mỗi khi plugin lên bản mới. Nó chỉ đụng đúng entry của
 mình, phần còn lại của `settings.json` giữ nguyên. Khi nào upstream sửa xong
 thì entry này thừa nhưng vô hại — tốn nhiều lắm là thêm một lần gọi gateway.
-
-**Bên dưới**, mỗi lựa chọn được gửi cho Jev dạng `{what, not_for}` — `not_for`
-nêu tên các lựa chọn anh em mà nó không được trùng, để các định nghĩa loại
-trừ nhau chứ không chỉ đứng cạnh nhau.
 
 **Ngữ cảnh** lấy từ 12 lượt gần nhất của transcript phiên (bỏ lượt subagent
 và lượt máy sinh), cắt còn 6000 ký tự. Mỗi câu hỏi tốn khoảng $0.00002 và mất

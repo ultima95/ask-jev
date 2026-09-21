@@ -3,8 +3,9 @@
 <h1 align="center">ask-jev</h1>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-0.1.0-2dd4bf?style=flat-square">
+  <img alt="version" src="https://img.shields.io/badge/version-0.2.0-2dd4bf?style=flat-square">
   <img alt="Claude Code plugin" src="https://img.shields.io/badge/Claude%20Code-plugin-1abc9c?style=flat-square">
+  <a href="https://github.com/yanmad27/ask-jev/actions/workflows/ci.yml"><img alt="ci" src="https://github.com/yanmad27/ask-jev/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="dependencies" src="https://img.shields.io/badge/dependencies-none-2dd4bf?style=flat-square">
   <img alt="node" src="https://img.shields.io/badge/node-%3E%3D18-1abc9c?style=flat-square">
 </p>
@@ -49,7 +50,18 @@ Questions that are genuinely yours to answer still reach you, unchanged.
 That's it. **No key set →** the plugin quietly does nothing and Claude Code
 asks you exactly as it always has. Nothing to break.
 
-## How it works
+## Upgrade
+
+```
+/plugin marketplace update ask-jev
+/plugin update ask-jev@ask-jev
+```
+
+The key file was renamed `jev-ask.key` → `ask-jev.key`; the old name is still
+read as a fallback, so there's nothing to migrate. Restart Claude Code after
+upgrading — hooks only reload on a fresh session.
+
+## 1. Auto-answer `AskUserQuestion`
 
 Before Claude Code shows you a question, ask-jev sends it to Jev with two
 things to judge:
@@ -77,16 +89,80 @@ Jev at all — it bounces the question straight back to Claude with
 instructions to re-ask with real definitions added. Nothing reaches you in
 that round; Claude just tries again.
 
-## When you still get asked
+Under the hood each option is sent as `{what, not_for}` — `not_for` names the
+sibling options it must not overlap with, so the definitions rule each other
+out instead of just sitting side by side.
+
+### Several questions, and multiSelect
+
+Several questions in one `AskUserQuestion` call are answered independently.
+Whichever ones Jev is confident about get used; the rest are handed back to
+you — the reason Claude gets back names the resolved answers and says to
+re-ask only what's left, so a confident answer never gets thrown away just
+because a sibling question stayed unclear.
+
+`multiSelect` questions go through Jev too: each option becomes its own
+yes/no question ("does this option apply?") instead of one pick. An option
+counts as selected once its probability clears `JEV_ASK_THRESHOLD`, rejected
+once it drops below `1 - JEV_ASK_THRESHOLD`, and the whole question stays
+unresolved if any option lands in between. A resolved answer is the
+comma-joined list of selected labels — possibly "none".
+
+### When it stays silent
 
 | Condition | Why |
 |---|---|
 | the question is personal (`personal > 0.5`) | that's your call, not the model's |
 | Jev isn't confident enough (`< JEV_ASK_THRESHOLD`) | guessing is worse than asking |
-| the question allows multiple answers (`multiSelect`) | one wrong pick would drag the whole set down with it |
-| several questions asked together, only some confident | a half-answer still forces a re-ask, and you'd already have lost a choice to a wrong guess |
 | an option has no description | a bare label isn't something Jev can judge — bounced back to Claude, not forwarded to Jev |
+| no usable context in the transcript | nothing for Jev to judge against |
 | no key set, Jev errors, or it takes over 8s | a broken helper must never be the reason you can't answer |
+
+## 2. Ask Jev before judging
+
+A `SessionStart` hook injects a short rule reminding Claude to ask Jev before
+any judgement call — classifying, picking among fixed options, yes/no on
+evidence, ranking — not just when `AskUserQuestion` fires. Two hooks run at
+every session start: `self-register.mjs`, which works around a Claude Code
+bug that stops plugin `PreToolUse` hooks from firing (see Implementation
+notes), and `session-start.mjs`, which injects the rule itself. Both are
+silent if no API key is configured.
+
+Beyond auto-answering `AskUserQuestion`, Claude can consult Jev for *any*
+judgement call — classify something, pick between options, answer yes/no,
+rate on a scale — via the bundled skill and CLI:
+
+```
+echo '{"state": ..., "questions": ...}' | node "${CLAUDE_PLUGIN_ROOT}/bin/jev.mjs"
+```
+
+Request:
+
+```json
+{
+  "state": { "item": "Two beef patties, cheese, and pickles between a sesame bun." },
+  "questions": {
+    "isHamburger": {
+      "type": "boolean",
+      "instructions": { "question": "Does `item` match the definition of a hamburger?", "focus": "Judge the food itself, not what it's called." },
+      "criteria": {
+        "true": "A hot sandwich: a cooked ground-meat patty inside a sliced bun",
+        "false": "Anything else — a cold sandwich, a non-ground protein, no bun, or not a sandwich at all"
+      }
+    }
+  }
+}
+```
+
+Response:
+
+```json
+{ "isHamburger": { "probability": 0.97, "confidence": 0.95 } }
+```
+
+The skill (`skills/ask-jev/SKILL.md`) explains what a good request looks
+like — evidence pasted verbatim into `state`, one judgement per question,
+criteria that are observable and mutually exclusive — with worked examples.
 
 ## Configuration
 
@@ -102,20 +178,6 @@ All optional — sensible defaults out of the box.
 The legacy key path `~/.claude/jev-ask.key` (from before the plugin was
 renamed) is still read as a fallback, so nothing breaks if you set it up
 under the old name.
-
-## Using Jev directly
-
-Beyond auto-answering `AskUserQuestion`, Claude can consult Jev for *any*
-judgement call — classify something, pick between options, answer yes/no,
-rate on a scale — via the bundled skill and CLI:
-
-```
-echo '{"state": ..., "questions": ...}' | node "${CLAUDE_PLUGIN_ROOT}/bin/jev.mjs"
-```
-
-The skill (`skills/ask-jev/SKILL.md`) explains what a good request looks
-like — evidence pasted verbatim into `state`, one judgement per question,
-criteria that are observable and mutually exclusive — with worked examples.
 
 ## Contributing
 
@@ -153,10 +215,6 @@ your `~/.claude/settings.json`, where hooks are known to work — and keeps the
 path current across plugin updates. It only ever touches its own entry and
 leaves the rest of your `settings.json` alone. Once upstream fixes that bug,
 this becomes a harmless duplicate — worst case, one extra gateway call.
-
-**Under the hood**, each option is sent to Jev as `{what, not_for}` —
-`not_for` names the sibling options it must not overlap with, so the
-definitions rule each other out instead of just sitting side by side.
 
 **Context** comes from the last 12 turns of the session transcript (subagent
 and machine-generated turns dropped), trimmed to 6000 characters. Each
