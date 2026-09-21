@@ -125,6 +125,15 @@ Claude Code gives hooks no way to return a synthetic tool result. But a
 behalf" is really *blocking the question and telling the model the answer*. In
 session you see one `Jev answered: ...` line and the model carries on.
 
+Claude Code currently doesn't run a plugin's own `PreToolUse` hooks at all
+([anthropics/claude-code#36397](https://github.com/anthropics/claude-code/issues/36397))
+— only `SessionStart` reliably fires from a plugin. So `hooks/self-register.mjs`
+runs on every `SessionStart` and writes the `PreToolUse` entry directly into
+your `~/.claude/settings.json`, where hooks are known to work, keeping the path
+current across plugin updates. It touches only its own entry and leaves the
+rest of your `settings.json` alone. Once upstream fixes that bug this becomes
+a harmless duplicate — worst case, one extra gateway call.
+
 Context comes from the last 12 turns of the session transcript (subagent and
 machine-generated turns dropped), trimmed to 6000 characters. Roughly $0.00002
 and ~0.7s per question.

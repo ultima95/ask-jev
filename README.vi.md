@@ -122,5 +122,14 @@ Claude Code không cho hook trả về tool result giả. Nhưng `PreToolUse` v�
 model** — nên "trả lời thay bạn" ở đây thực chất là *chặn câu hỏi + nói cho model
 biết đáp án*. Trong phiên bạn sẽ thấy một dòng `Jev answered: ...` rồi model đi tiếp.
 
+Claude Code hiện không chạy `PreToolUse` hook khai trong plugin
+([anthropics/claude-code#36397](https://github.com/anthropics/claude-code/issues/36397))
+— chỉ `SessionStart` từ plugin là chạy được. Nên `hooks/self-register.mjs` chạy
+mỗi `SessionStart`, tự ghi entry `PreToolUse` thẳng vào `~/.claude/settings.json`
+của bạn — nơi hook vẫn chạy bình thường — và tự cập nhật lại đường dẫn mỗi khi
+plugin lên bản mới. Nó chỉ đụng đúng entry của mình, phần còn lại của
+`settings.json` giữ nguyên. Khi nào upstream sửa xong thì entry này thừa nhưng
+vô hại — tốn nhiều lắm là thêm một lần gọi gateway.
+
 Ngữ cảnh lấy từ 12 lượt gần nhất của transcript phiên (bỏ lượt subagent và lượt
 máy sinh), cắt còn 6000 ký tự. Khoảng $0.00002 và ~0.7s mỗi câu hỏi.
