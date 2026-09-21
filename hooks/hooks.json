@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/jev-ask.mjs\"",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/ask-jev.mjs\"",
             "timeout": 15,
             "statusMessage": "Asking Jev before asking you..."
           }

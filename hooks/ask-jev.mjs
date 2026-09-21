@@ -13,42 +13,11 @@
  * Không phụ thuộc npm: chỉ fetch + fs của Node.
  */
 import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { apiKey, askJev } from "../lib/jev.mjs";
 
-const GATEWAY = process.env.JEV_GATEWAY_URL ?? "https://ai-gateway.vercel.sh/v4/ai/evaluation-model";
-const MODEL = process.env.JEV_MODEL ?? "typesafe-ai/jev";
 const THRESHOLD = Number(process.env.JEV_ASK_THRESHOLD ?? 0.8);
-const TIMEOUT_MS = 8_000;
 const CONTEXT_TURNS = 12;
 const CONTEXT_CHARS = 6_000;
-
-/** Khoá: biến môi trường trước, rồi tới file — để không phải nhét secret vào settings.json. */
-function apiKey() {
-  if (process.env.AI_GATEWAY_API_KEY) return process.env.AI_GATEWAY_API_KEY.trim();
-  try {
-    return readFileSync(join(homedir(), ".claude", "jev-ask.key"), "utf8").trim() || null;
-  } catch {
-    return null;
-  }
-}
-
-async function askJev(key, state, questions) {
-  const res = await fetch(GATEWAY, {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${key}`,
-      "content-type": "application/json",
-      "ai-gateway-protocol-version": "0.0.1",
-      "ai-evaluation-model-specification-version": "4",
-      "ai-model-id": MODEL,
-    },
-    body: JSON.stringify({ state, questions }),
-    signal: AbortSignal.timeout(TIMEOUT_MS),
-  });
-  if (!res.ok) throw new Error(`gateway ${res.status}`);
-  return (await res.json()).answers;
-}
 
 /**
  * Hai câu hỏi, không phải một. `pick` nói phương án nào đúng; `personal` nói câu
@@ -61,27 +30,48 @@ async function askJev(key, state, questions) {
 async function decide(key, { question, options, context }) {
   if (options.length < 2) return null;
 
+  // main() đã chặn description rỗng, nên ở đây description luôn có sẵn.
+  // criteria dạng {what, not_for} và instructions dạng {question, focus} theo
+  // docs.typesafe.ai/primitives/choice — not_for nêu tên các lựa chọn khác để
+  // ép tính loại trừ lẫn nhau, chứ không chỉ liệt kê định nghĩa rời rạc.
   const criteria = Object.fromEntries(
-    options.map((o, i) => [`o${i}`, o.description ? `${o.label} — ${o.description}` : o.label]),
+    options.map((o, i) => [
+      `o${i}`,
+      {
+        what: `${o.label} — ${o.description}`,
+        not_for: options.filter((_, j) => j !== i).map((other) => other.label).join(", "),
+      },
+    ]),
   );
 
-  const answers = await askJev(key, { context, question, options: criteria }, {
-    pick: {
-      type: "choice",
-      instructions:
-        "Given the context, which option answers the question? Choose what the user themselves would choose.",
-      criteria,
-    },
-    personal: {
-      type: "boolean",
-      instructions:
-        "Is this question a matter of personal taste, aesthetics, private priorities, or an irreversible consequence — something only the user has standing to answer?",
-      criteria: {
-        true: "Personal preference, aesthetic choice, a trade-off that depends on private goals, or deleting/sending/publishing something that cannot be undone",
-        false: "There is a correct answer derivable from the context, established convention, or technical fact",
+  // docs.typesafe.ai/concepts/state: state là nội dung để đánh giá, tách khỏi câu
+  // hỏi (judgment) nằm trong instructions; mỗi phần đặt tên rõ để giữ quan hệ.
+  const answers = await askJev(
+    key,
+    { conversationContext: context, pendingQuestion: question, answerOptions: criteria },
+    {
+      pick: {
+        type: "choice",
+        instructions: {
+          question: "Given `conversationContext`, which option answers `pendingQuestion`?",
+          focus:
+            "Each option's `what` in `answerOptions` is its definition, `not_for` is what it must not overlap with. Choose what the user themselves would choose.",
+        },
+        criteria,
+      },
+      personal: {
+        type: "boolean",
+        instructions: {
+          question: "Is `pendingQuestion` something only the user has standing to answer?",
+          focus: "A matter of personal taste, aesthetics, private priorities, or an irreversible consequence.",
+        },
+        criteria: {
+          true: "Personal preference, aesthetic choice, a trade-off that depends on private goals, or deleting/sending/publishing something that cannot be undone",
+          false: "There is a correct answer derivable from `conversationContext`, established convention, or technical fact",
+        },
       },
     },
-  });
+  );
 
   if (answers.personal.probability > 0.5) return null;
   const confidence = answers.pick.probabilities?.[answers.pick.choice] ?? 1;
@@ -136,6 +126,30 @@ async function main() {
   if (!Array.isArray(questions) || questions.length === 0) return;
   // Chọn nhiều đáp án: một lựa chọn sai kéo theo cả chùm, để người quyết.
   if (questions.some((q) => q.multiSelect)) return;
+
+  // Jev chấm theo criteria; nhãn trần không có description thì không phải criterion.
+  const missing = questions.flatMap((q) =>
+    (q.options ?? [])
+      .filter((o) => !o.description || !o.description.trim())
+      .map((o) => `"${q.question}" → option "${o.label}"`),
+  );
+  if (missing.length > 0) {
+    process.stdout.write(JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "deny",
+        permissionDecisionReason:
+          "Every option needs a description that DEFINES it — that's the criterion Jev scores a probability against, a bare " +
+          "label is not one. A usable definition is observable (checkable directly against the conversation, not inferred) and " +
+          "mutually exclusive (it could not also describe a different option) — otherwise the probability is meaningless. " +
+          'Example: question "Is this a hamburger?" → option "Yes" needs a description like "A hot sandwich: cooked ground-meat ' +
+          'patty inside a sliced bun" — checkable, and clearly not what "No" would also satisfy — not just "Yes". ' +
+          `Re-ask the same question(s) with every option carrying a definition like that. Missing definitions:\n${missing.join("\n")}`,
+        systemMessage: "Jev: options need definitions — asking again",
+      },
+    }));
+    return;
+  }
 
   const context = loadContext(input.transcript_path ?? "");
   if (!context) return;

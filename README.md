@@ -1,4 +1,6 @@
-# jev-ask
+<p align="center"><img src="./assets/logo.jpg" alt="ask-jev logo" width="200"></p>
+
+# ask-jev
 
 **English** · [Tiếng Việt](./README.vi.md)
 
@@ -21,14 +23,14 @@ Questions that are actually yours still reach you.
 ## Install
 
 ```
-/plugin marketplace add yanmad27/jev-ask
-/plugin install jev-ask@jev-ask
+/plugin marketplace add yanmad27/ask-jev
+/plugin install ask-jev@ask-jev
 ```
 
 Then set a Vercel AI Gateway key (Jev is in its model catalogue):
 
 ```bash
-echo 'vck_...' > ~/.claude/jev-ask.key && chmod 600 ~/.claude/jev-ask.key
+echo 'vck_...' > ~/.claude/ask-jev.key && chmod 600 ~/.claude/ask-jev.key
 ```
 
 Or use the `AI_GATEWAY_API_KEY` environment variable if you already have one.
@@ -47,6 +49,18 @@ brand colour and confirm your directory deletion — wrong not about facts but
 about standing. `personal` blocks taste, trade-offs that depend on private
 goals, and anything irreversible, even when `pick` is certain.
 
+For `pick` to mean anything, every option needs a description that **defines**
+it — that's the criterion Jev scores against, not the label. "Is this a
+hamburger?" with an option just labelled "Yes" gives Jev nothing to judge;
+"Yes" needs a description like "A hot sandwich: cooked ground-meat patty
+inside a sliced bun". If any option is missing one, Claude Code never reaches
+Jev — the question is bounced straight back to Claude with instructions to
+re-ask with definitions added. Nothing reaches you in that round.
+
+Under the hood each option is sent as `{what, not_for}` — `not_for` names the
+sibling options it must not overlap with, so the definitions rule each other
+out instead of just sitting side by side.
+
 ## When it stays silent
 
 | Condition | Why |
@@ -55,16 +69,33 @@ goals, and anything irreversible, even when `pick` is certain.
 | confidence `< JEV_ASK_THRESHOLD` | guessing is worse than asking |
 | `multiSelect` question | one wrong pick drags the whole set with it |
 | several questions, only some confident | a half answer still forces the question again, and you already lost one choice |
+| an option has no description | a bare label isn't a criterion — sent back to Claude to re-ask with definitions, not forwarded to Jev |
 | no key / Jev errors / over 8s | a broken helper must never block you from answering |
 
 ## Configuration
 
 | Variable | Default | |
 |---|---|---|
-| `AI_GATEWAY_API_KEY` | `~/.claude/jev-ask.key` | Vercel AI Gateway key |
+| `AI_GATEWAY_API_KEY` | `~/.claude/ask-jev.key` | Vercel AI Gateway key |
 | `JEV_ASK_THRESHOLD` | `0.8` | lower = answers more, wrong more |
 | `JEV_MODEL` | `typesafe-ai/jev` | |
 | `JEV_GATEWAY_URL` | Vercel's evaluation endpoint | |
+
+The legacy `~/.claude/jev-ask.key` (pre-rename) is still read as a fallback.
+
+## Asking Jev yourself
+
+Skill `skills/ask-jev` + CLI `bin/jev.mjs` let Claude consult Jev for any
+judgement call, not just `AskUserQuestion` — classify, pick, yes/no, rate.
+The skill defines what a good request looks like: evidence pasted in
+`state`, one judgement per question, criteria that are observable and
+mutually exclusive. The CLI just sends it:
+
+```
+echo '{"state": ..., "questions": ...}' | node "${CLAUDE_PLUGIN_ROOT}/bin/jev.mjs"
+```
+
+Full request shape and examples: `skills/ask-jev/SKILL.md`.
 
 ## Hacking on it
 
@@ -72,7 +103,7 @@ On the machine where you develop it, point the marketplace at your working copy
 instead of GitHub, so edits apply immediately with no push-then-update cycle:
 
 ```
-/plugin marketplace add ~/workspace/jev-ask
+/plugin marketplace add ~/workspace/ask-jev
 ```
 
 ## Technical notes

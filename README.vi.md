@@ -1,4 +1,6 @@
-# jev-ask
+<p align="center"><img src="./assets/logo.jpg" alt="ask-jev logo" width="200"></p>
+
+# ask-jev
 
 [English](./README.md) · **Tiếng Việt**
 
@@ -20,14 +22,14 @@ Câu nào thuộc về bạn thì vẫn tới bạn.
 ## Cài
 
 ```
-/plugin marketplace add yanmad27/jev-ask
-/plugin install jev-ask@jev-ask
+/plugin marketplace add yanmad27/ask-jev
+/plugin install ask-jev@ask-jev
 ```
 
 Rồi đặt khoá Vercel AI Gateway (có Jev trong danh mục model):
 
 ```bash
-echo 'vck_...' > ~/.claude/jev-ask.key && chmod 600 ~/.claude/jev-ask.key
+echo 'vck_...' > ~/.claude/ask-jev.key && chmod 600 ~/.claude/ask-jev.key
 ```
 
 Hoặc dùng biến môi trường `AI_GATEWAY_API_KEY` nếu bạn đã có sẵn.
@@ -46,6 +48,18 @@ tông màu thương hiệu lẫn việc xoá thư mục — sai không phải v�
 thẩm quyền. `personal` chặn sở thích, đánh đổi phụ thuộc mục tiêu riêng, và mọi
 việc không hoàn tác được, kể cả khi `pick` rất chắc.
 
+Để `pick` có ý nghĩa, mỗi lựa chọn phải có description **định nghĩa** nó — đó
+mới là tiêu chí Jev chấm, chứ không phải cái nhãn. Câu "Đây có phải burger
+không?" với lựa chọn chỉ ghi "Có" thì Jev chẳng có gì để chấm cả; "Có" cần một
+description như "Một món ăn nóng: miếng thịt bằm nướng kẹp trong bánh mì tròn
+cắt đôi". Thiếu description ở bất kỳ lựa chọn nào, Claude Code không gọi Jev —
+câu hỏi bị trả ngược cho Claude kèm hướng dẫn hỏi lại với đầy đủ định nghĩa.
+Vòng đó không có gì đến tay bạn.
+
+Bên dưới, mỗi lựa chọn được gửi dạng `{what, not_for}` — `not_for` nêu tên
+các lựa chọn anh em mà nó không được trùng, để các định nghĩa loại trừ nhau
+chứ không chỉ đứng cạnh nhau.
+
 ## Khi nào nó im lặng
 
 | Điều kiện | Vì sao |
@@ -54,16 +68,33 @@ việc không hoàn tác được, kể cả khi `pick` rất chắc.
 | độ chắc `< JEV_ASK_THRESHOLD` | đoán mò thì thà hỏi |
 | câu hỏi `multiSelect` | một lựa chọn sai kéo theo cả chùm |
 | nhiều câu mà chỉ chắc vài câu | trả lời nửa chừng vẫn phải hỏi lại, mà bạn đã mất một lựa chọn |
+| có lựa chọn thiếu description | nhãn trần không phải tiêu chí — trả về cho Claude hỏi lại, không đưa cho Jev |
 | không khoá / Jev lỗi / quá 8s | hỏng thì không được chặn bạn trả lời |
 
 ## Cấu hình
 
 | Biến | Mặc định | |
 |---|---|---|
-| `AI_GATEWAY_API_KEY` | `~/.claude/jev-ask.key` | khoá Vercel AI Gateway |
+| `AI_GATEWAY_API_KEY` | `~/.claude/ask-jev.key` | khoá Vercel AI Gateway |
 | `JEV_ASK_THRESHOLD` | `0.8` | hạ xuống = tự quyết nhiều hơn, sai nhiều hơn |
 | `JEV_MODEL` | `typesafe-ai/jev` | |
 | `JEV_GATEWAY_URL` | endpoint đánh giá của Vercel | |
+
+File khoá cũ `~/.claude/jev-ask.key` (trước khi đổi tên) vẫn được đọc như phương án dự phòng.
+
+## Tự hỏi Jev
+
+Skill `skills/ask-jev` + CLI `bin/jev.mjs` cho Claude tự hỏi Jev với bất kỳ
+quyết định nào, không chỉ `AskUserQuestion` — phân loại, chọn phương án,
+có/không, chấm điểm. Skill định nghĩa thế nào là một request tốt: bằng chứng
+dán nguyên vào `state`, mỗi câu hỏi một quyết định, tiêu chí quan sát được và
+loại trừ lẫn nhau. CLI chỉ việc gửi nó:
+
+```
+echo '{"state": ..., "questions": ...}' | node "${CLAUDE_PLUGIN_ROOT}/bin/jev.mjs"
+```
+
+Chi tiết request và ví dụ: `skills/ask-jev/SKILL.md`.
 
 ## Sửa plugin
 
@@ -71,7 +102,7 @@ Máy đang phát triển thì trỏ marketplace vào thư mục làm việc thay
 sửa xong là chạy luôn, không phải push rồi update:
 
 ```
-/plugin marketplace add ~/workspace/jev-ask
+/plugin marketplace add ~/workspace/ask-jev
 ```
 
 ## Ghi chú kỹ thuật
