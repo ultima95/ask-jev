@@ -19,6 +19,12 @@ paseo plugin install ~/.paseo/plugins/ask-jev --id ask-jev
 
 `build` in `paseo-plugin.json` runs `sync-stats` automatically. Or use Settings → Plugins → paste path → Install.
 
+## Open it
+
+Cmd+K / Ctrl+K → "Ask Jev" (Command Center — panels aren't Cmd+K searchable on
+their own, so `index.client.tsx` registers both `addWorkspacePanel` and an
+`addCommandCenterItem` that opens it).
+
 ## Dev loop
 
 Edit, then `paseo plugin reload ask-jev`. `paseo plugin logs ask-jev` shows server output.
