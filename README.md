@@ -128,6 +128,11 @@ bug that stops plugin `PreToolUse` hooks from firing (see Implementation
 notes), and `session-start.mjs`, which injects the rule itself. Both are
 silent if no API key is configured.
 
+Since a session-start reminder tends to get forgotten a dozen turns in, the
+`prompt` gate (below) re-injects the same one-line rule on **every** turn via
+a `UserPromptSubmit` hook. Set `JEV_REMIND=0` to turn it off (e.g. if you
+find it repetitive); it's already silent with no API key configured.
+
 Beyond auto-answering `AskUserQuestion`, Claude can consult Jev for *any*
 judgement call — classify something, pick between options, answer yes/no,
 rate on a scale — via the bundled skill and CLI:
@@ -169,6 +174,43 @@ Response:
 The skill (`skills/ask-jev/SKILL.md`) explains what a good request looks
 like — evidence pasted verbatim into `state`, one judgement per question,
 criteria that are observable and mutually exclusive — with worked examples.
+
+## 3. Automatic gates
+
+Beyond auto-answering `AskUserQuestion`, four hooks ask Jev proactively at
+the moments a human reviewer would actually weigh in — no explicit judgement
+call needed from Claude. Each is on by default and can be turned off
+individually with `JEV_GATES` (comma list; `JEV_GATES=` disables all four).
+
+| Gate | Fires on | Jev judges | Effect |
+|---|---|---|---|
+| `permission` | `PreToolUse` (Bash/Edit/Write/MultiEdit/NotebookEdit) | Is this safe to run without asking? | `p ≥ 0.9` → auto-allow; `p ≤ 0.2` → force an ask; otherwise untouched |
+| `stop` | `Stop` | Did the assistant stop with work still owed? | `p ≥ 0.85` → blocks the stop with a reason; a repeat block is throttled 30s to avoid looping |
+| `bash` | `PostToolUse` (Bash) | success / error / tests_failed / needs_attention | Non-`success` at `p ≥ 0.8` adds one line of context for Claude |
+| `prompt` | `UserPromptSubmit` | Is the prompt ambiguous? (skipped under 12 chars or starting with `/`) | Adds the "ask Jev" reminder, plus a one-line ambiguity warning at `p ≥ 0.85` |
+
+**What Jev is shown.** Every gate — and the `AskUserQuestion` hook from
+section 1 — builds the same structured `state` (`lib/context.mjs`), aiming
+for what a human reviewer would actually look at:
+
+- `task`: the first user message of the session (the original ask) and the
+  latest one, verbatim.
+- `conversation`: session turns, newest-first, including tool names used and
+  a short summary of what each tool returned.
+- `workspace`: current git branch, `git status --short`, `git diff --stat`.
+- `action`: whatever is specific to that gate — the exact command/edit being
+  proposed, the Bash output being triaged, or the final assistant message.
+
+The whole thing is capped at `JEV_STATE_CHARS` (default `60000`; Jev's own
+docs don't document a limit, so this is a self-imposed ceiling), filled in
+the priority order above — `task` first, then as much `conversation` as fits.
+A real ~33k-character state measured ~1.8s round-trip; each gate call times
+out at 4s internally (8s at the hook level), so a slow or oversized state
+degrades to "emits nothing" rather than blocking you. Lower
+`JEV_STATE_CHARS` if you want snappier gates at the cost of less context.
+
+Same fail-open rules as everywhere else: no API key, a gateway error, or a
+timeout means the gate is silent — never a blocker.
 
 ## Usage analytics
 
@@ -224,6 +266,9 @@ All optional — sensible defaults out of the box.
 |---|---|---|
 | `AI_GATEWAY_API_KEY` | reads `~/.claude/ask-jev.key` | your Vercel AI Gateway key |
 | `JEV_ASK_THRESHOLD` | `0.8` | lower it to let Jev answer more often (and be wrong more often) |
+| `JEV_REMIND` | (on) | set to `0` to stop the per-turn "ask Jev" reminder |
+| `JEV_GATES` | `permission,stop,bash,prompt` | comma list of enabled [automatic gates](#3-automatic-gates); empty disables all |
+| `JEV_STATE_CHARS` | `60000` | max characters of context sent to Jev per gate call — lower for faster/cheaper gates |
 | `JEV_MODEL` | `typesafe-ai/jev` | which model Jev evaluation runs against |
 | `JEV_GATEWAY_URL` | Vercel's evaluation endpoint | only needed for a custom gateway |
 
