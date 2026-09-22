@@ -42,3 +42,21 @@ jobs:
         run: |
           out=$(echo '{}' | env -u AI_GATEWAY_API_KEY HOME=/tmp/nohome node hooks/session-start.mjs)
           [ -z "$out" ]
+
+  paseo-plugin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: paseo-plugin/package-lock.json
+
+      - name: Install
+        working-directory: paseo-plugin
+        run: npm ci
+
+      - name: Build (typecheck)
+        working-directory: paseo-plugin
+        run: npm run build
