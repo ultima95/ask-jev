@@ -209,7 +209,12 @@ Paseo's scripts panel to view usage without leaving the app.
 
 For a live dashboard instead of a script, install the
 [Paseo plugin](paseo-plugin/README.md) — a workspace panel with stat tiles,
-an outcome breakdown, and a live-updating decisions table.
+an outcome breakdown, and a live-updating decisions table. Settings → Plugins
+→ paste into "Plugin source" → Install:
+
+```
+github:yanmad27/ask-jev:paseo-plugin
+```
 
 ## Configuration
 

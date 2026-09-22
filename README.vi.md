@@ -205,7 +205,11 @@ Paseo để xem số liệu sử dụng mà không cần rời khỏi app.
 
 Muốn dashboard sống động hơn một script, cài [Paseo plugin](paseo-plugin/README.md)
 — một workspace panel với ô số liệu, phân bố outcome, và bảng quyết định cập
-nhật liên tục.
+nhật liên tục. Settings → Plugins → dán vào ô "Plugin source" → Install:
+
+```
+github:yanmad27/ask-jev:paseo-plugin
+```
 
 ## Cấu hình
 
