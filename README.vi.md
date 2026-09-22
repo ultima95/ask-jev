@@ -125,8 +125,8 @@ xếp hạng — chứ không chỉ khi `AskUserQuestion` được gọi. Hai ho
 hook khai trong plugin không chạy (xem Ghi chú triển khai), và
 `session-start.mjs`, tiêm luật vào. Cả hai đều im lặng nếu chưa có khoá API.
 
-Nhắc một lần đầu phiên rất dễ bị quên sau vài chục lượt, nên
-`hooks/remind.mjs` tiêm lại đúng một dòng luật đó ở **mỗi** lượt qua hook
+Nhắc một lần đầu phiên rất dễ bị quên sau vài chục lượt, nên gate `prompt`
+(bên dưới) tiêm lại đúng một dòng luật đó ở **mỗi** lượt qua hook
 `UserPromptSubmit`. Đặt `JEV_REMIND=0` để tắt (ví dụ thấy lặp lại phiền); nó
 cũng tự im lặng nếu chưa có khoá API.
 
@@ -171,6 +171,42 @@ Response:
 Skill (`skills/ask-jev/SKILL.md`) giải thích thế nào là một request tốt —
 bằng chứng dán nguyên vào `state`, mỗi câu hỏi một quyết định, tiêu chí quan
 sát được và loại trừ lẫn nhau — kèm ví dụ cụ thể.
+
+## 3. Cổng tự động
+
+Ngoài tự trả lời `AskUserQuestion`, bốn hook chủ động hỏi Jev đúng lúc một
+người review thật sẽ lên tiếng — Claude không cần tự nhận ra đây là một
+quyết định cần hỏi. Cả bốn bật sẵn, tắt riêng từng cái bằng `JEV_GATES`
+(danh sách phẩy; `JEV_GATES=` tắt hết).
+
+| Gate | Chạy lúc | Jev phán | Kết quả |
+|---|---|---|---|
+| `permission` | `PreToolUse` (Bash/Edit/Write/MultiEdit/NotebookEdit) | Việc này chạy không cần hỏi có an toàn không? | `p ≥ 0.9` → tự allow; `p ≤ 0.2` → ép hỏi lại; còn lại giữ nguyên |
+| `stop` | `Stop` | Claude dừng khi việc còn dang dở không? | `p ≥ 0.85` → chặn dừng kèm lý do; chặn lặp lại thì bị hãm 30s để tránh vòng lặp |
+| `bash` | `PostToolUse` (Bash) | success / error / tests_failed / needs_attention | Không phải `success` với `p ≥ 0.8` → gắn thêm một dòng ngữ cảnh cho Claude |
+| `prompt` | `UserPromptSubmit` | Prompt có mập mờ không? (bỏ qua nếu dưới 12 ký tự hoặc bắt đầu bằng `/`) | Thêm dòng nhắc "hỏi Jev", cộng một dòng cảnh báo mập mờ nếu `p ≥ 0.85` |
+
+**Jev thấy gì.** Mỗi gate — và cả hook `AskUserQuestion` ở mục 1 — dựng
+cùng một `state` có cấu trúc (`lib/context.mjs`), nhắm tới thứ một người
+review thật sự nhìn vào:
+
+- `task`: tin nhắn đầu tiên của phiên (yêu cầu gốc) và tin nhắn mới nhất,
+  nguyên văn.
+- `conversation`: các lượt trong phiên, mới nhất trước, kèm tên tool đã
+  dùng và tóm tắt ngắn kết quả mỗi tool trả về.
+- `workspace`: branch git hiện tại, `git status --short`, `git diff --stat`.
+- `action`: phần riêng của từng gate — lệnh/sửa đổi đang định chạy, output
+  Bash đang được phân loại, hoặc tin nhắn cuối của assistant.
+
+Tất cả bị chặn ở `JEV_STATE_CHARS` (mặc định `60000`; docs của Jev không nêu
+giới hạn nào nên đây là trần tự đặt), lấp theo thứ tự ưu tiên ở trên —
+`task` trước, rồi lấp `conversation` bằng phần còn lại. Một state thật ~33
+nghìn ký tự đo được khoảng 1.8s round-trip; mỗi gate tự timeout 4s (8s ở mức
+hook), nên state chậm hoặc quá khổ chỉ khiến gate "im lặng" chứ không chặn
+bạn. Hạ `JEV_STATE_CHARS` nếu muốn gate nhanh hơn, đổi lại ít ngữ cảnh hơn.
+
+Quy tắc fail-open giống mọi nơi khác: không có khoá API, gateway lỗi, hay
+timeout đều khiến gate im lặng — không bao giờ chặn bạn.
 
 ## Thống kê sử dụng
 
@@ -225,6 +261,8 @@ Tất cả đều tuỳ chọn — mặc định đã hợp lý sẵn.
 | `AI_GATEWAY_API_KEY` | đọc `~/.claude/ask-jev.key` | khoá Vercel AI Gateway của bạn |
 | `JEV_ASK_THRESHOLD` | `0.8` | hạ xuống để Jev tự trả lời nhiều hơn (và cũng sai nhiều hơn) |
 | `JEV_REMIND` | (bật) | đặt `0` để tắt lời nhắc "hỏi Jev" mỗi lượt |
+| `JEV_GATES` | `permission,stop,bash,prompt` | danh sách phẩy các [cổng tự động](#3-cổng-tự-động) đang bật; rỗng thì tắt hết |
+| `JEV_STATE_CHARS` | `60000` | số ký tự ngữ cảnh tối đa gửi cho Jev mỗi lần gọi gate — hạ xuống để gate nhanh/rẻ hơn |
 | `JEV_MODEL` | `typesafe-ai/jev` | model nào Jev dùng để đánh giá |
 | `JEV_GATEWAY_URL` | endpoint đánh giá của Vercel | chỉ cần đổi nếu dùng gateway riêng |
 

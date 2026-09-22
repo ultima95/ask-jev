@@ -17,6 +17,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { apiKey, askJev, logEvent } from "../lib/jev.mjs";
+import { buildState, hasContext } from "../lib/context.mjs";
 
 /**
  * hooks.json và self-register.mjs (xem file đó) có thể cùng đăng ký hook này, nên
@@ -38,8 +39,6 @@ function isDuplicate(input) {
 }
 
 const THRESHOLD = Number(process.env.JEV_ASK_THRESHOLD ?? 0.8);
-const CONTEXT_TURNS = 12;
-const CONTEXT_CHARS = 6_000;
 
 function logDecision(question, options, outcome, extra = {}) {
   logEvent({ kind: "decision", source: "hook", question, options: options.map((o) => o.label), outcome, ...extra });
@@ -178,36 +177,6 @@ async function decideMulti(key, { question, options, context }) {
   return { label, confidence };
 }
 
-/** Vài lượt gần nhất. Bỏ lượt subagent và lượt máy sinh — chúng nói chuyện nội bộ. */
-function loadContext(path) {
-  let lines;
-  try {
-    lines = readFileSync(path, "utf8").split("\n");
-  } catch {
-    return "";
-  }
-
-  const turns = [];
-  for (let i = lines.length - 1; i >= 0 && turns.length < CONTEXT_TURNS; i--) {
-    if (!lines[i].trim()) continue;
-    let row;
-    try {
-      row = JSON.parse(lines[i]);
-    } catch {
-      continue;
-    }
-    if (row.isSidechain || row.isMeta) continue;
-    if (row.type !== "user" && row.type !== "assistant") continue;
-
-    const c = row.message?.content;
-    const text = typeof c === "string"
-      ? c
-      : Array.isArray(c) ? c.filter((p) => p.type === "text").map((p) => p.text).join("\n") : "";
-    if (text.trim()) turns.unshift(`${row.type === "user" ? "User" : "Claude"}: ${text.trim()}`);
-  }
-  return turns.join("\n\n").slice(-CONTEXT_CHARS);
-}
-
 async function main() {
   let input;
   try {
@@ -256,8 +225,8 @@ async function main() {
     return;
   }
 
-  const context = loadContext(input.transcript_path ?? "");
-  if (!context) {
+  const context = buildState({ transcriptPath: input.transcript_path ?? "", cwd: input.cwd });
+  if (!hasContext(context)) {
     logEvent({ kind: "decision", source: "hook", outcome: "no_context" });
     return;
   }
