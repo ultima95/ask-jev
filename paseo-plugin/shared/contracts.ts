@@ -14,6 +14,8 @@ export const DecisionEventSchema = z.object({
   label: z.string().optional(),
   confidence: z.number().optional(),
   reason: z.string().optional(),
+  repo: z.string().optional(),
+  agent: z.string().optional(),
 });
 
 const GateSummarySchema = z.object({
