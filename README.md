@@ -128,6 +128,11 @@ bug that stops plugin `PreToolUse` hooks from firing (see Implementation
 notes), and `session-start.mjs`, which injects the rule itself. Both are
 silent if no API key is configured.
 
+Since a session-start reminder tends to get forgotten a dozen turns in,
+`hooks/remind.mjs` re-injects the same one-line rule on **every** turn via a
+`UserPromptSubmit` hook. Set `JEV_REMIND=0` to turn it off (e.g. if you find
+it repetitive); it's already silent with no API key configured.
+
 Beyond auto-answering `AskUserQuestion`, Claude can consult Jev for *any*
 judgement call — classify something, pick between options, answer yes/no,
 rate on a scale — via the bundled skill and CLI:
@@ -224,6 +229,7 @@ All optional — sensible defaults out of the box.
 |---|---|---|
 | `AI_GATEWAY_API_KEY` | reads `~/.claude/ask-jev.key` | your Vercel AI Gateway key |
 | `JEV_ASK_THRESHOLD` | `0.8` | lower it to let Jev answer more often (and be wrong more often) |
+| `JEV_REMIND` | (on) | set to `0` to stop the per-turn "ask Jev" reminder |
 | `JEV_MODEL` | `typesafe-ai/jev` | which model Jev evaluation runs against |
 | `JEV_GATEWAY_URL` | Vercel's evaluation endpoint | only needed for a custom gateway |
 

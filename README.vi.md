@@ -125,6 +125,11 @@ xếp hạng — chứ không chỉ khi `AskUserQuestion` được gọi. Hai ho
 hook khai trong plugin không chạy (xem Ghi chú triển khai), và
 `session-start.mjs`, tiêm luật vào. Cả hai đều im lặng nếu chưa có khoá API.
 
+Nhắc một lần đầu phiên rất dễ bị quên sau vài chục lượt, nên
+`hooks/remind.mjs` tiêm lại đúng một dòng luật đó ở **mỗi** lượt qua hook
+`UserPromptSubmit`. Đặt `JEV_REMIND=0` để tắt (ví dụ thấy lặp lại phiền); nó
+cũng tự im lặng nếu chưa có khoá API.
+
 Không chỉ tự trả lời `AskUserQuestion`, Claude còn có thể hỏi Jev cho *bất kỳ*
 quyết định nào — phân loại, chọn phương án, có/không, chấm điểm — qua skill và
 CLI đi kèm:
@@ -219,6 +224,7 @@ Tất cả đều tuỳ chọn — mặc định đã hợp lý sẵn.
 |---|---|---|
 | `AI_GATEWAY_API_KEY` | đọc `~/.claude/ask-jev.key` | khoá Vercel AI Gateway của bạn |
 | `JEV_ASK_THRESHOLD` | `0.8` | hạ xuống để Jev tự trả lời nhiều hơn (và cũng sai nhiều hơn) |
+| `JEV_REMIND` | (bật) | đặt `0` để tắt lời nhắc "hỏi Jev" mỗi lượt |
 | `JEV_MODEL` | `typesafe-ai/jev` | model nào Jev dùng để đánh giá |
 | `JEV_GATEWAY_URL` | endpoint đánh giá của Vercel | chỉ cần đổi nếu dùng gateway riêng |
 
