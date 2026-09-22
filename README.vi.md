@@ -161,6 +161,45 @@ Skill (`skills/ask-jev/SKILL.md`) giải thích thế nào là một request t�
 bằng chứng dán nguyên vào `state`, mỗi câu hỏi một quyết định, tiêu chí quan
 sát được và loại trừ lẫn nhau — kèm ví dụ cụ thể.
 
+## Thống kê sử dụng
+
+Mỗi lần gọi gateway và mỗi quyết định của hook được ghi thành một dòng JSON
+vào `~/.claude/ask-jev.log` (đổi đường dẫn bằng `JEV_LOG_FILE`, tắt hẳn bằng
+`JEV_LOG=0`). Chỉ ghi nội dung câu hỏi và nhãn các lựa chọn — không bao giờ
+ghi transcript hội thoại hay payload `state` gửi cho Jev.
+
+Xem bằng:
+
+```
+node "${CLAUDE_PLUGIN_ROOT}/bin/jev.mjs" stats
+```
+
+```
+Calls: 12 (ok 11, error 1)
+Latency: avg 412ms, p95 780ms
+
+Decisions by outcome:
+  answered              7  58.3%
+  low_confidence         3  25.0%
+  personal               2  16.7%
+
+Recent decisions:
+  2026-09-22T10:03:11.000Z  answered           Is this a bug or a feature?    bug (0.91)
+```
+
+Thu hẹp khoảng thời gian bằng `--last N` hoặc `--since 7d|24h`, thêm `--json`
+để lấy số liệu thô thay vì báo cáo dạng text.
+
+### Trong Paseo
+
+Repo này có sẵn `paseo.json` với hai workspace script: `jev:stats` (chạy báo
+cáo ở trên) và `jev:log` (`tail -f` file log). Mở chúng từ panel scripts của
+Paseo để xem số liệu sử dụng mà không cần rời khỏi app.
+
+Muốn dashboard sống động hơn một script, cài [Paseo plugin](paseo-plugin/README.md)
+— một workspace panel với ô số liệu, phân bố outcome, và bảng quyết định cập
+nhật liên tục.
+
 ## Cấu hình
 
 Tất cả đều tuỳ chọn — mặc định đã hợp lý sẵn.

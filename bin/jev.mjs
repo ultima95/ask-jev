@@ -4,14 +4,54 @@
  * in `answers` thô ra stdout. Dùng bởi skill ask-jev, hoặc trực tiếp.
  */
 import { readFileSync } from "node:fs";
-import { apiKey, askJev } from "../lib/jev.mjs";
+import { apiKey, askJev, logFilePath } from "../lib/jev.mjs";
+import { computeStats, filterSince, parseEvents, recentDecisions, sinceMsFromSpec } from "../lib/stats.mjs";
 
 function fail(message) {
   process.stderr.write(`jev: ${message}\n`);
   process.exit(1);
 }
 
+function stats(args) {
+  const path = logFilePath();
+  let raw;
+  try {
+    raw = readFileSync(path, "utf8");
+  } catch {
+    process.stdout.write(`no log yet at ${path}\n`);
+    return;
+  }
+
+  let events = parseEvents(raw);
+  events = filterSince(events, sinceMsFromSpec(args[args.indexOf("--since") + 1]));
+  const lastN = Number(args[args.indexOf("--last") + 1]);
+  if (lastN > 0) events = events.slice(-lastN);
+
+  const summary = computeStats(events);
+
+  if (args.includes("--json")) {
+    process.stdout.write(JSON.stringify(summary) + "\n");
+    return;
+  }
+
+  process.stdout.write(`Calls: ${summary.calls.total} (ok ${summary.calls.ok}, error ${summary.calls.error})\n`);
+  process.stdout.write(`Latency: avg ${summary.calls.avg_latency_ms}ms, p95 ${summary.calls.p95_latency_ms}ms\n\n`);
+  process.stdout.write("Decisions by outcome:\n");
+  for (const [outcome, count] of Object.entries(summary.decisions.by_outcome)) {
+    const pct = summary.decisions.total ? ((count / summary.decisions.total) * 100).toFixed(1) : "0.0";
+    process.stdout.write(`  ${outcome.padEnd(20)} ${String(count).padStart(4)}  ${pct}%\n`);
+  }
+  process.stdout.write("\nRecent decisions:\n");
+  for (const d of recentDecisions(events, 10)) {
+    const q = d.question.length > 60 ? `${d.question.slice(0, 57)}...` : d.question;
+    const extra = d.label ? `${d.label} (${Number(d.confidence).toFixed(2)})` : "";
+    process.stdout.write(`  ${d.ts}  ${d.outcome.padEnd(18)} ${q.padEnd(62)} ${extra}\n`);
+  }
+}
+
 async function main() {
+  if (process.argv[2] === "stats") return stats(process.argv.slice(3));
+
   const path = process.argv[2];
   let raw;
   try {

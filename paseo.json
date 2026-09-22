@@ -1,0 +1,10 @@
+{
+  "scripts": {
+    "jev:stats": {
+      "command": "node bin/jev.mjs stats --last 20"
+    },
+    "jev:log": {
+      "command": "tail -n 50 -f \"${JEV_LOG_FILE:-$HOME/.claude/ask-jev.log}\""
+    }
+  }
+}

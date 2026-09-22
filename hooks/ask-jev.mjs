@@ -13,11 +13,15 @@
  * Không phụ thuộc npm: chỉ fetch + fs của Node.
  */
 import { readFileSync } from "node:fs";
-import { apiKey, askJev } from "../lib/jev.mjs";
+import { apiKey, askJev, logEvent } from "../lib/jev.mjs";
 
 const THRESHOLD = Number(process.env.JEV_ASK_THRESHOLD ?? 0.8);
 const CONTEXT_TURNS = 12;
 const CONTEXT_CHARS = 6_000;
+
+function logDecision(question, options, outcome, extra = {}) {
+  logEvent({ kind: "decision", source: "hook", question, options: options.map((o) => o.label), outcome, ...extra });
+}
 
 /**
  * Câu hỏi `personal` dùng chung cho cả single-pick lẫn multiSelect: câu hỏi này
@@ -40,7 +44,10 @@ const PERSONAL_QUESTION = {
 };
 
 async function decide(key, { question, options, context }) {
-  if (options.length < 2) return null;
+  if (options.length < 2) {
+    logDecision(question, options, "error", { reason: "single option" });
+    return null;
+  }
 
   // main() đã chặn description rỗng, nên ở đây description luôn có sẵn.
   // criteria dạng {what, not_for} và instructions dạng {question, focus} theo
@@ -73,13 +80,22 @@ async function decide(key, { question, options, context }) {
       },
       personal: PERSONAL_QUESTION,
     },
+    "hook",
   );
 
-  if (answers.personal.probability > 0.5) return null;
+  if (answers.personal.probability > 0.5) {
+    logDecision(question, options, "personal");
+    return null;
+  }
   const confidence = answers.pick.probabilities?.[answers.pick.choice] ?? 1;
-  if (confidence < THRESHOLD) return null;
+  if (confidence < THRESHOLD) {
+    logDecision(question, options, "low_confidence", { confidence });
+    return null;
+  }
 
-  return { label: options[Number.parseInt(answers.pick.choice.slice(1), 10)]?.label, confidence };
+  const label = options[Number.parseInt(answers.pick.choice.slice(1), 10)]?.label;
+  logDecision(question, options, "answered", { label, confidence });
+  return { label, confidence };
 }
 
 /**
@@ -89,7 +105,10 @@ async function decide(key, { question, options, context }) {
  * câu hỏi coi như chưa giải quyết được, để người quyết.
  */
 async function decideMulti(key, { question, options, context }) {
-  if (options.length < 2) return null;
+  if (options.length < 2) {
+    logDecision(question, options, "error", { reason: "single option" });
+    return null;
+  }
 
   const questions = { personal: PERSONAL_QUESTION };
   options.forEach((o, i) => {
@@ -106,26 +125,35 @@ async function decideMulti(key, { question, options, context }) {
     };
   });
 
-  const answers = await askJev(key, { conversationContext: context, pendingQuestion: question }, questions);
+  const answers = await askJev(key, { conversationContext: context, pendingQuestion: question }, questions, "hook");
 
-  if (answers.personal.probability > 0.5) return null;
+  if (answers.personal.probability > 0.5) {
+    logDecision(question, options, "personal");
+    return null;
+  }
 
   const selected = [];
   let confidence = 1;
   for (let i = 0; i < options.length; i++) {
     const p = answers[`o${i}`]?.probability;
-    if (p === undefined) return null;
+    if (p === undefined) {
+      logDecision(question, options, "error");
+      return null;
+    }
     if (p >= THRESHOLD) {
       selected.push(options[i].label);
       confidence = Math.min(confidence, p);
     } else if (p <= 1 - THRESHOLD) {
       confidence = Math.min(confidence, 1 - p);
     } else {
+      logDecision(question, options, "low_confidence", { confidence: p });
       return null;
     }
   }
 
-  return { label: selected.length > 0 ? selected.join(", ") : "none", confidence };
+  const label = selected.length > 0 ? selected.join(", ") : "none";
+  logDecision(question, options, "answered", { label, confidence });
+  return { label, confidence };
 }
 
 /** Vài lượt gần nhất. Bỏ lượt subagent và lượt máy sinh — chúng nói chuyện nội bộ. */
@@ -160,7 +188,10 @@ function loadContext(path) {
 
 async function main() {
   const key = apiKey();
-  if (!key) return;
+  if (!key) {
+    logEvent({ kind: "decision", source: "hook", outcome: "no_key" });
+    return;
+  }
 
   let input;
   try {
@@ -180,6 +211,11 @@ async function main() {
       .map((o) => `"${q.question}" → option "${o.label}"`),
   );
   if (missing.length > 0) {
+    for (const q of questions) {
+      if ((q.options ?? []).some((o) => !o.description || !o.description.trim())) {
+        logDecision(q.question, q.options ?? [], "missing_definition");
+      }
+    }
     process.stdout.write(JSON.stringify({
       hookSpecificOutput: {
         hookEventName: "PreToolUse",
@@ -198,12 +234,18 @@ async function main() {
   }
 
   const context = loadContext(input.transcript_path ?? "");
-  if (!context) return;
+  if (!context) {
+    logEvent({ kind: "decision", source: "hook", outcome: "no_context" });
+    return;
+  }
 
   const results = await Promise.all(
     questions.map((q) => {
       const fn = q.multiSelect ? decideMulti : decide;
-      return fn(key, { question: q.question, options: q.options ?? [], context }).catch(() => null);
+      return fn(key, { question: q.question, options: q.options ?? [], context }).catch(() => {
+        logDecision(q.question, q.options ?? [], "error");
+        return null;
+      });
     }),
   );
 
