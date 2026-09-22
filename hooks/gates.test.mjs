@@ -204,3 +204,29 @@ test("DESTRUCTIVE.false lists Claude Code scratch dirs as reversible", async () 
   const { DESTRUCTIVE } = await import("../lib/gate.mjs");
   assert.match(DESTRUCTIVE.false, /\.claude\/plans/, "must mention ~/.claude/plans/");
 });
+
+// --- Bidirectional mirror reconciliation: contradiction must favor the SAFE side, not 0.5 ---
+
+test("stop gate: incomplete forward/mirror contradiction still blocks (high-p safe side preserved)", async () => {
+  // fwd=0.9 (block), mirror says complete (twin=1.0). Symmetric collapse→~0.5 would DEFEAT the block; asymmetric keeps it.
+  const server = await stub({ incomplete: { probability: 0.9 }, incomplete__mirror: { probability: 1.0 } });
+  const out = JSON.parse(await runGate("stop", { ...stopInput, session_id: `stopdis-${Math.random()}` }, `http://127.0.0.1:${server.address().port}`));
+  server.close();
+  assert.equal(out.decision, "block");
+});
+
+test("permission gate: safe forward/mirror contradiction denies auto-allow (low-p safe side preserved)", async () => {
+  // fwd safe=0.9 but mirror says not-safe (twin=1.0). Must NOT auto-allow.
+  const server = await stub({ safe: { probability: 0.9 }, safe__mirror: { probability: 1.0 }, destructive: { probability: 0.1 }, destructive__mirror: { probability: 0.9 } });
+  const out = await runGate("permission", editInput, `http://127.0.0.1:${server.address().port}`);
+  server.close();
+  assert.doesNotMatch(out, /"permissionDecision":"allow"/);
+  assert.match(out, /"permissionDecision":"ask"/);
+});
+
+test("permission gate: safe forward/mirror agreement still auto-allows (no overcorrection)", async () => {
+  const server = await stub({ safe: { probability: 0.95 }, safe__mirror: { probability: 0.05 }, destructive: { probability: 0.05 }, destructive__mirror: { probability: 0.95 } });
+  const out = await runGate("permission", editInput, `http://127.0.0.1:${server.address().port}`);
+  server.close();
+  assert.match(out, /"permissionDecision":"allow"/);
+});

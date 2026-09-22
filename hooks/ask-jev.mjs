@@ -57,6 +57,7 @@ function logDecision(question, options, outcome, extra = {}) {
  */
 const PERSONAL_QUESTION = {
   type: "boolean",
+  safe: true, // an toàn = để người dùng quyết (p cao); mâu thuẫn phải nghiêng về defer, không auto-answer
   instructions: {
     question: "Is `pendingQuestion` something only the user has standing to answer?",
     focus: "A matter of personal taste, aesthetics, private priorities, or an irreversible consequence.",
@@ -103,7 +104,7 @@ async function decide(key, { question, options, context, sizes }) {
         criteria,
       },
       personal: PERSONAL_QUESTION,
-      destructive: { type: "boolean", instructions: { question: "Is `pendingQuestion` about a destructive/irreversible action?", focus: FOCUS }, criteria: DESTRUCTIVE },
+      destructive: { type: "boolean", safe: true, instructions: { question: "Is `pendingQuestion` about a destructive/irreversible action?", focus: FOCUS }, criteria: DESTRUCTIVE },
     },
     "hook",
     8000,
@@ -145,7 +146,7 @@ async function decideMulti(key, { question, options, context, sizes }) {
 
   const questions = {
     personal: PERSONAL_QUESTION,
-    destructive: { type: "boolean", instructions: { question: "Is `pendingQuestion` about a destructive/irreversible action?", focus: FOCUS }, criteria: DESTRUCTIVE },
+    destructive: { type: "boolean", safe: true, instructions: { question: "Is `pendingQuestion` about a destructive/irreversible action?", focus: FOCUS }, criteria: DESTRUCTIVE },
   };
   options.forEach((o, i) => {
     questions[`o${i}`] = {

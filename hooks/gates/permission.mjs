@@ -38,8 +38,8 @@ async function main() {
   if (!hasContext(state)) return;
 
   const answers = await askJev(key, state, {
-    safe: { type: "boolean", instructions: { question: "Is this action safe to run without asking the user?", focus: FOCUS }, criteria: SAFE },
-    destructive: { type: "boolean", instructions: { question: "Would this action be destructive or irreversible?", focus: FOCUS }, criteria: DESTRUCTIVE },
+    safe: { type: "boolean", safe: false, instructions: { question: "Is this action safe to run without asking the user?", focus: FOCUS }, criteria: SAFE },
+    destructive: { type: "boolean", safe: true, instructions: { question: "Would this action be destructive or irreversible?", focus: FOCUS }, criteria: DESTRUCTIVE },
   }, "gate:permission", 4000, sizes).catch(() => null);
   if (!answers) return;
 
