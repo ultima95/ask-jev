@@ -130,8 +130,14 @@ quyết định nào — phân loại, chọn phương án, có/không, chấm �
 CLI đi kèm:
 
 ```
-echo '{"state": ..., "questions": ...}' | node "${CLAUDE_PLUGIN_ROOT}/bin/jev.mjs"
+echo '{"state": ..., "questions": ...}' | node ~/.claude/plugins/marketplaces/ask-jev/bin/jev.mjs
 ```
+
+Để tiện lợi, thêm vào shell profile của bạn:
+```
+alias jev='node ~/.claude/plugins/marketplaces/ask-jev/bin/jev.mjs'
+```
+Rồi dùng `jev` trực tiếp từ bất kỳ terminal nào.
 
 Request:
 
@@ -171,7 +177,7 @@ ghi transcript hội thoại hay payload `state` gửi cho Jev.
 Xem bằng:
 
 ```
-node "${CLAUDE_PLUGIN_ROOT}/bin/jev.mjs" stats
+node ~/.claude/plugins/marketplaces/ask-jev/bin/jev.mjs stats
 ```
 
 ```
@@ -187,8 +193,9 @@ Recent decisions:
   2026-09-22T10:03:11.000Z  answered           Is this a bug or a feature?    bug (0.91)
 ```
 
-Thu hẹp khoảng thời gian bằng `--last N` hoặc `--since 7d|24h`, thêm `--json`
-để lấy số liệu thô thay vì báo cáo dạng text.
+Thu hẹp khoảng thời gian bằng `--last N` hoặc `--since 7d|24h`, thêm `--json` để lấy số liệu thô thay vì báo cáo dạng text.
+
+**Lưu ý:** `${CLAUDE_PLUGIN_ROOT}` chỉ có sẵn bên trong hooks/skills của Claude Code; để gọi CLI từ terminal, dùng `~/.claude/plugins/marketplaces/ask-jev/bin/jev.mjs` hoặc alias `jev`.
 
 ### Trong Paseo
 
