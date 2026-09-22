@@ -115,3 +115,5 @@ stderr message (no key, malformed input, gateway error, timeout).
 - Summarizing the evidence into `state` instead of pasting it verbatim.
 - Bundling several independent judgements into one `question` instead of
   decomposing them into separate entries.
+
+To see how often Jev is actually being consulted: `node "${CLAUDE_PLUGIN_ROOT}/bin/jev.mjs" stats`.

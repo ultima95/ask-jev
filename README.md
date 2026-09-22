@@ -164,6 +164,46 @@ The skill (`skills/ask-jev/SKILL.md`) explains what a good request looks
 like — evidence pasted verbatim into `state`, one judgement per question,
 criteria that are observable and mutually exclusive — with worked examples.
 
+## Usage analytics
+
+Every gateway call and every hook decision is appended as one JSON line to
+`~/.claude/ask-jev.log` (override the path with `JEV_LOG_FILE`, disable
+entirely with `JEV_LOG=0`). Only the question text and option labels are
+recorded — never the conversation transcript or the `state` payload sent to
+Jev.
+
+Inspect it with:
+
+```
+node "${CLAUDE_PLUGIN_ROOT}/bin/jev.mjs" stats
+```
+
+```
+Calls: 12 (ok 11, error 1)
+Latency: avg 412ms, p95 780ms
+
+Decisions by outcome:
+  answered              7  58.3%
+  low_confidence         3  25.0%
+  personal               2  16.7%
+
+Recent decisions:
+  2026-09-22T10:03:11.000Z  answered           Is this a bug or a feature?    bug (0.91)
+```
+
+Narrow the window with `--last N` or `--since 7d|24h`, or add `--json` to get
+the raw aggregates instead of the text report.
+
+### In Paseo
+
+This repo ships a `paseo.json` with two workspace scripts: `jev:stats` (runs
+the report above) and `jev:log` (`tail -f` on the log file). Open them from
+Paseo's scripts panel to view usage without leaving the app.
+
+For a live dashboard instead of a script, install the
+[Paseo plugin](paseo-plugin/README.md) — a workspace panel with stat tiles,
+an outcome breakdown, and a live-updating decisions table.
+
 ## Configuration
 
 All optional — sensible defaults out of the box.
