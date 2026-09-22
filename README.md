@@ -133,8 +133,14 @@ judgement call — classify something, pick between options, answer yes/no,
 rate on a scale — via the bundled skill and CLI:
 
 ```
-echo '{"state": ..., "questions": ...}' | node "${CLAUDE_PLUGIN_ROOT}/bin/jev.mjs"
+echo '{"state": ..., "questions": ...}' | node ~/.claude/plugins/marketplaces/ask-jev/bin/jev.mjs
 ```
+
+For convenience, add to your shell profile:
+```
+alias jev='node ~/.claude/plugins/marketplaces/ask-jev/bin/jev.mjs'
+```
+Then use `jev` directly from any terminal.
 
 Request:
 
@@ -175,7 +181,7 @@ Jev.
 Inspect it with:
 
 ```
-node "${CLAUDE_PLUGIN_ROOT}/bin/jev.mjs" stats
+node ~/.claude/plugins/marketplaces/ask-jev/bin/jev.mjs stats
 ```
 
 ```
@@ -191,8 +197,9 @@ Recent decisions:
   2026-09-22T10:03:11.000Z  answered           Is this a bug or a feature?    bug (0.91)
 ```
 
-Narrow the window with `--last N` or `--since 7d|24h`, or add `--json` to get
-the raw aggregates instead of the text report.
+Narrow the window with `--last N` or `--since 7d|24h`, or add `--json` to get the raw aggregates instead of the text report.
+
+**Note:** `${CLAUDE_PLUGIN_ROOT}` is available inside Claude Code hooks/skills; for manual CLI calls from your terminal, use `~/.claude/plugins/marketplaces/ask-jev/bin/jev.mjs` or the `jev` alias.
 
 ### In Paseo
 
@@ -202,7 +209,12 @@ Paseo's scripts panel to view usage without leaving the app.
 
 For a live dashboard instead of a script, install the
 [Paseo plugin](paseo-plugin/README.md) — a workspace panel with stat tiles,
-an outcome breakdown, and a live-updating decisions table.
+an outcome breakdown, and a live-updating decisions table. Settings → Plugins
+→ paste into "Plugin source" → Install:
+
+```
+github:yanmad27/ask-jev:paseo-plugin
+```
 
 ## Configuration
 

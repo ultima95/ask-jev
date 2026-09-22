@@ -60,3 +60,6 @@ jobs:
       - name: Build (typecheck)
         working-directory: paseo-plugin
         run: npm run build
+
+      - name: shared/stats.mjs matches ../lib/stats.mjs
+        run: git diff --exit-code paseo-plugin/shared/stats.mjs

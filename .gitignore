@@ -1,4 +1,3 @@
 node_modules
 *.key
 .DS_Store
-paseo-plugin/shared/stats.mjs
