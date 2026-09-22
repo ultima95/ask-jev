@@ -12,8 +12,30 @@
  *
  * Không phụ thuộc npm: chỉ fetch + fs của Node.
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, openSync, closeSync, statSync, unlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createHash } from "node:crypto";
 import { apiKey, askJev, logEvent } from "../lib/jev.mjs";
+
+/**
+ * hooks.json và self-register.mjs (xem file đó) có thể cùng đăng ký hook này, nên
+ * cùng một câu hỏi tới hai lần cách nhau chưa tới 1s. Lock file theo session + nội
+ * dung câu hỏi, còn mới (< 10s) thì coi là bản trùng, im lặng bỏ qua.
+ */
+function isDuplicate(input) {
+  const hash = createHash("sha1").update(JSON.stringify(input.tool_input ?? {})).digest("hex");
+  const lockPath = join(tmpdir(), `ask-jev-${input.session_id ?? "x"}-${hash}`);
+  try {
+    if (Date.now() - statSync(lockPath).mtimeMs > 10_000) unlinkSync(lockPath);
+  } catch {}
+  try {
+    closeSync(openSync(lockPath, "wx"));
+    return false;
+  } catch {
+    return true;
+  }
+}
 
 const THRESHOLD = Number(process.env.JEV_ASK_THRESHOLD ?? 0.8);
 const CONTEXT_TURNS = 12;
@@ -187,12 +209,6 @@ function loadContext(path) {
 }
 
 async function main() {
-  const key = apiKey();
-  if (!key) {
-    logEvent({ kind: "decision", source: "hook", outcome: "no_key" });
-    return;
-  }
-
   let input;
   try {
     input = JSON.parse(readFileSync(0, "utf8"));
@@ -200,6 +216,13 @@ async function main() {
     return;
   }
   if (input.tool_name !== "AskUserQuestion") return;
+  if (isDuplicate(input)) return;
+
+  const key = apiKey();
+  if (!key) {
+    logEvent({ kind: "decision", source: "hook", outcome: "no_key" });
+    return;
+  }
 
   const questions = input.tool_input?.questions;
   if (!Array.isArray(questions) || questions.length === 0) return;

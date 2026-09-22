@@ -24,13 +24,16 @@ function stub(handler) {
   });
   return new Promise((r) => server.listen(0, "127.0.0.1", () => r(server)));
 }
-async function runHook(input, url) {
+async function runRaw(input, url) {
   const child = execFileAsync("node", ["hooks/ask-jev.mjs"], {
     env: { ...process.env, AI_GATEWAY_API_KEY: "dummy", JEV_GATEWAY_URL: url, JEV_LOG_FILE: logFile },
     encoding: "utf8",
   });
   child.child.stdin.end(JSON.stringify(input));
-  return JSON.parse((await child).stdout);
+  return (await child).stdout;
+}
+async function runHook(input, url) {
+  return JSON.parse(await runRaw(input, url));
 }
 const opts = [{ label: "A", description: "a" }, { label: "B", description: "b" }];
 
@@ -68,6 +71,25 @@ test("multiSelect: decisive per-option answers join into one label", async () =>
   }, `http://127.0.0.1:${server.address().port}`);
   server.close();
   assert.match(out.hookSpecificOutput.permissionDecisionReason, /"Pick features" → A \(/);
+});
+
+test("duplicate call is silent: one gateway request, one decision line", async () => {
+  let calls = 0;
+  const server = await stub(() => {
+    calls++;
+    return { pick: { choice: "o0", probabilities: { o0: 0.95 } }, personal: { probability: 0.1 } };
+  });
+  const url = `http://127.0.0.1:${server.address().port}`;
+  const input = { tool_name: "AskUserQuestion", session_id: `dedupe-${Math.random()}`, transcript_path: transcript, tool_input: { questions: [{ question: "Dup?", options: opts }] } };
+  try {
+    await runHook(input, url);
+    assert.equal(await runRaw(input, url), "");
+  } finally {
+    server.close();
+  }
+  assert.equal(calls, 1);
+  const decisions = readFileSync(logFile, "utf8").trim().split("\n").map((l) => JSON.parse(l)).filter((e) => e.kind === "decision" && e.question === "Dup?");
+  assert.equal(decisions.length, 1);
 });
 
 test("lib/stats.mjs: malformed lines skipped, --since filters, recentDecisions caps to newest N", () => {
