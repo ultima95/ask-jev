@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.1.0](https://github.com/yanmad27/ask-jev/compare/v1.0.2...v1.1.0) (2026-09-22)
+
+
+### Features
+
+* log calling agent + git remote per decision, two-column detail panel ([7e2ed34](https://github.com/yanmad27/ask-jev/commit/7e2ed34d460804c713051d14b749762a933e82e0))
+* **log:** record calling agent id and git remote per decision ([9b7fce6](https://github.com/yanmad27/ask-jev/commit/9b7fce616634d4b149a2081654bf346e8ebb725d))
+* **panel:** two-column decision detail, show full question/reason ([1abf472](https://github.com/yanmad27/ask-jev/commit/1abf4724d63920fda60a9f221d4099279c29bb79))
+
 ## [1.0.2](https://github.com/yanmad27/ask-jev/compare/v1.0.1...v1.0.2) (2026-09-22)
 
 
