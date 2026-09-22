@@ -35,6 +35,8 @@ interface LogEvent {
   label?: string;
   confidence?: number;
   reason?: string;
+  repo?: string;
+  agent?: string;
 }
 
 let cache: { path: string; mtimeMs: number; size: number; events: LogEvent[] } | null = null;
@@ -99,6 +101,8 @@ export function getStats({ since, outcome, gate }: RpcInput<typeof jevStatsRpc>)
       label: d.label,
       confidence: d.confidence,
       reason: d.reason,
+      repo: d.repo,
+      agent: d.agent,
     })),
   };
 }
