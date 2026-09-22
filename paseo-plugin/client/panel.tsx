@@ -182,20 +182,36 @@ export function AskJevPanel({ theme, layout }: PluginWorkspacePanelProps) {
                     <Text style={styles.muted}>Loading…</Text>
                   ) : detail ? (
                     <>
-                      {Object.entries(detail).map(([field, value]) => (
-                        <View key={field} style={styles.detailRow}>
-                          <Text style={styles.detailLabel}>{formatFieldLabel(field)}</Text>
-                          <Text
-                            selectable
-                            style={[styles.detailValue, field === "question" && { fontFamily: mono }]}
-                          >
-                            {formatFieldValue(value)}
-                          </Text>
-                        </View>
-                      ))}
-                      <Pressable accessibilityRole="button" onPress={() => setExpandedKey(null)} style={styles.detailClose}>
-                        <Text style={styles.detailCloseText}>Close</Text>
-                      </Pressable>
+                      <View style={styles.detailLeft}>
+                        {Object.entries(detail)
+                          .filter(([field]) => LONG_TEXT_FIELDS.has(field))
+                          .map(([field, value]) => (
+                            <View key={field} style={styles.detailRow}>
+                              <Text style={styles.detailLabel}>{formatFieldLabel(field)}</Text>
+                              <Text
+                                selectable
+                                style={[styles.detailValue, field === "question" && { fontFamily: mono }]}
+                              >
+                                {formatFieldValue(value)}
+                              </Text>
+                            </View>
+                          ))}
+                      </View>
+                      <View style={styles.detailRight}>
+                        {Object.entries(detail)
+                          .filter(([field]) => !LONG_TEXT_FIELDS.has(field))
+                          .map(([field, value]) => (
+                            <View key={field} style={styles.detailRow}>
+                              <Text style={styles.detailLabel}>{formatFieldLabel(field)}</Text>
+                              <Text selectable style={styles.detailValue}>
+                                {formatFieldValue(value)}
+                              </Text>
+                            </View>
+                          ))}
+                        <Pressable accessibilityRole="button" onPress={() => setExpandedKey(null)} style={styles.detailClose}>
+                          <Text style={styles.detailCloseText}>Close</Text>
+                        </Pressable>
+                      </View>
                     </>
                   ) : (
                     <Text style={styles.muted}>Could not load the full record.</Text>
@@ -237,6 +253,8 @@ function formatTime(ts: string): string {
 
 // Mirrors lib/stats.mjs's POSITIVE map — kept small and local since it's presentational only.
 const POSITIVE: Record<string, string[]> = { ask: ["answered"], permission: ["allow"], stop: ["ok"], bash: ["success"], prompt: ["clear"] };
+
+const LONG_TEXT_FIELDS = new Set(["question", "reason"]);
 
 function outcomeColor(theme: PluginTheme, gate: string | undefined, outcome: string): string {
   if (gate && (POSITIVE[gate] ?? []).includes(outcome)) return theme.colors.statusSuccess;
@@ -295,12 +313,16 @@ function makeStyles(theme: PluginTheme, compact: boolean) {
     colReason: { flex: compact ? 1 : 2 },
     muted: { color: theme.colors.foregroundMuted, fontSize: 12 },
     detail: {
+      flexDirection: "row" as const,
+      flexWrap: "wrap" as const,
       backgroundColor: theme.colors.surface1,
       borderBottomWidth: 1,
       borderColor: theme.colors.surface2,
       padding: 10,
-      gap: 6,
+      gap: 16,
     },
+    detailLeft: { flex: 3, minWidth: 220, gap: 8 },
+    detailRight: { width: compact ? 180 : 220, gap: 8 },
     detailRow: { gap: 2 },
     detailLabel: { fontSize: 11, color: theme.colors.foregroundMuted, textTransform: "uppercase" as const },
     detailValue: { fontSize: 13, color: theme.colors.foreground, flexWrap: "wrap" as const },
