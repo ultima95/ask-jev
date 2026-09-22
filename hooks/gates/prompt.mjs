@@ -3,7 +3,7 @@
 import { fileURLToPath } from "node:url";
 import { apiKey, askJev, logEvent } from "../../lib/jev.mjs";
 import { buildState, hasContext } from "../../lib/context.mjs";
-import { enabled, readStdinJson } from "../../lib/gate.mjs";
+import { enabled, readStdinJson, FOCUS } from "../../lib/gate.mjs";
 
 const jevPath = fileURLToPath(new URL("../../bin/jev.mjs", import.meta.url));
 const REMINDER = `Reminder: before classifying / choosing among options / yes-no on evidence, ask Jev: echo '<json>' | node "${jevPath}" (skill ask-jev). Personal taste or irreversible actions → ask the user.`;
@@ -21,7 +21,7 @@ async function ambiguityWarning(input) {
       type: "boolean",
       instructions: {
         question: "Does the latest prompt read as ambiguous?",
-        focus: "Judge using the task, the conversation so far, and the workspace state; the user's original ask is the ground truth for scope.",
+        focus: FOCUS,
       },
       criteria: {
         true: "Multiple materially different readings that would change the work",

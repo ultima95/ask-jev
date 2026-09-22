@@ -2,10 +2,7 @@
 /** PreToolUse: Jev tự allow việc rõ ràng an toàn, tự ask khi rõ ràng nguy hiểm, im lặng khi lửng lơ. */
 import { apiKey, askJev, logEvent } from "../../lib/jev.mjs";
 import { buildState, hasContext } from "../../lib/context.mjs";
-import { enabled, readStdinJson } from "../../lib/gate.mjs";
-
-const FOCUS = "Judge using the task, the conversation so far, the workspace state and the exact action; " +
-  "the user's original ask is the ground truth for scope.";
+import { enabled, readStdinJson, FOCUS } from "../../lib/gate.mjs";
 
 async function main() {
   if (!enabled("permission")) return;
@@ -26,7 +23,7 @@ async function main() {
       instructions: { question: "Is this action safe to run without asking the user?", focus: FOCUS },
       criteria: {
         true: "Read-only, or a reversible edit scoped inside the workspace, in service of the current task",
-        false: "Deletes/overwrites outside the workspace, force-push, rm -rf, secrets exfiltration, network writes, package publish, or anything else irreversible",
+        false: "Deletes/overwrites outside the workspace, force-push, rm -rf, secrets exfiltration, network writes, pushing to a remote (even non-force), package publish, or anything else irreversible",
       },
     },
   }, "gate:permission", 4000).catch(() => null);

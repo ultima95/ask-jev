@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import { writeFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const execFileAsync = promisify(execFile);
 const transcript = join(mkdtempSync(join(tmpdir(), "gates-")), "t.jsonl");
@@ -23,13 +24,18 @@ function stub(answers) {
   return new Promise((r) => server.listen(0, "127.0.0.1", () => r(server)));
 }
 
-async function runGate(name, input, url, gates = name) {
-  const child = execFileAsync("node", [`hooks/gates/${name}.mjs`], {
+async function runGateFull(name, input, url, gates = name, cwd) {
+  const script = fileURLToPath(new URL(`gates/${name}.mjs`, import.meta.url));
+  const child = execFileAsync("node", [script], {
+    cwd,
     env: { ...process.env, AI_GATEWAY_API_KEY: "dummy", JEV_GATEWAY_URL: url, JEV_LOG_FILE: logFile, JEV_GATES: gates, JEV_REMIND: "0" },
     encoding: "utf8",
   });
   child.child.stdin.end(JSON.stringify(input));
-  return (await child).stdout;
+  return child;
+}
+async function runGate(name, input, url, gates = name) {
+  return (await runGateFull(name, input, url, gates)).stdout;
 }
 
 const editInput = { tool_name: "Edit", transcript_path: transcript, cwd: process.cwd(), tool_input: { file_path: "a.js" } };
@@ -47,13 +53,15 @@ test("permission gate: allow on p=0.95, ask on p=0.1, silent on p=0.5", async ()
   }
 });
 
-test("stop gate: blocks on p(incomplete)=0.9, then silent on immediate re-stop (loop guard)", async () => {
+test("stop gate: blocks with top-level decision on p(incomplete)=0.9, skips when stop_hook_active", async () => {
   const server = await stub({ incomplete: { probability: 0.9 } });
   const url = `http://127.0.0.1:${server.address().port}`;
-  assert.match(await runGate("stop", stopInput, url), /"decision":"block"/);
-  const again = await runGate("stop", stopInput, url);
+  const out = JSON.parse(await runGate("stop", stopInput, url));
+  assert.equal(out.decision, "block");
+  assert.match(out.reason, /incomplete/);
+  const skipped = await runGate("stop", { ...stopInput, stop_hook_active: true }, url);
   server.close();
-  assert.equal(again, "");
+  assert.equal(skipped, "");
 });
 
 test("bash gate: emits additionalContext for tests_failed", async () => {
@@ -70,4 +78,10 @@ test("all four gates emit nothing when JEV_GATES= is empty", async () => {
     assert.equal(await runGate(name, input, url, ""), "");
   }
   server.close();
+});
+
+test("gate in a non-git cwd stays quiet on stderr (git's own errors aren't leaked)", async () => {
+  const { stdout, stderr } = await runGateFull("permission", { ...editInput, cwd: "/tmp", transcript_path: "/dev/null" }, "http://127.0.0.1:9", "permission", "/tmp");
+  assert.equal(stdout, "");
+  assert.equal(stderr, "");
 });

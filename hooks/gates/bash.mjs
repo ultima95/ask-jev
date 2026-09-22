@@ -2,10 +2,7 @@
 /** PostToolUse (Bash): Jev gắn thêm ngữ cảnh khi lệnh không "success" thẳng thớm. */
 import { apiKey, askJev, logEvent } from "../../lib/jev.mjs";
 import { buildState, hasContext } from "../../lib/context.mjs";
-import { enabled, readStdinJson, tailText } from "../../lib/gate.mjs";
-
-const FOCUS = "Judge using the task, the conversation so far, the workspace state and the exact action; " +
-  "the user's original ask is the ground truth for scope.";
+import { enabled, readStdinJson, tailText, FOCUS } from "../../lib/gate.mjs";
 
 // tool_response chưa có schema chốt trong docs — chấp cả string lẫn object {stdout|output|content}.
 function responseText(r) {
