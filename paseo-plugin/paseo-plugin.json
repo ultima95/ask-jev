@@ -3,6 +3,5 @@
   "description": "ask-jev usage log: calls, decisions, and outcomes in a workspace panel",
   "requirements": {
     "paseo": ">=0.9.0-beta.2"
-  },
-  "build": [["npm", "run", "sync-stats"]]
+  }
 }
