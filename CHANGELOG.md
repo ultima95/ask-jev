@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/yanmad27/ask-jev/compare/v1.1.0...v1.2.0) (2026-09-23)
+
+
+### Features
+
+* **jev:** bidirectional null-hypothesis asking; log full question ([b7a5770](https://github.com/yanmad27/ask-jev/commit/b7a57701bb34347038a18fa84f1ad95bbfa2c05c))
+
 ## [1.1.0](https://github.com/yanmad27/ask-jev/compare/v1.0.2...v1.1.0) (2026-09-22)
 
 
