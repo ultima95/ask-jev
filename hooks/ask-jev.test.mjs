@@ -179,3 +179,53 @@ test("lib/jev.mjs: a hanging gateway response stays within the requested budget"
   const elapsed = Number(stdout);
   assert.ok(elapsed < budgetMs + 500, `expected well under budgetMs=${budgetMs}, got ${elapsed}ms`);
 });
+
+// --- Bidirectional mirror reconciliation: personal/destructive must stay conservative under contradiction ---
+
+async function runRawEnv(input, url, extraEnv) {
+  const child = execFileAsync("node", ["hooks/ask-jev.mjs"], {
+    env: { ...process.env, AI_GATEWAY_API_KEY: "dummy", ASK_JEV_GATEWAY_URL: url, ASK_JEV_LOG_FILE: logFile, ...extraEnv },
+    encoding: "utf8",
+  });
+  child.child.stdin.end(JSON.stringify(input));
+  return (await child).stdout;
+}
+
+test("bidirectional: destructive forward/mirror contradiction forces ask (no auto-answer)", async () => {
+  // fwd=0.7 destructive, mirror=0.7 reversible → contradiction. Symmetric collapse→0.5 (<0.6) would auto-answer; asymmetric→~0.9 trips the floor.
+  const server = await stub(() => ({
+    pick: { choice: "o0", probabilities: { o0: 0.99 } },
+    personal: { probability: 0.05 }, personal__mirror: { probability: 0.95 },
+    destructive: { probability: 0.7 }, destructive__mirror: { probability: 0.7 },
+  }));
+  const out = await runRaw({ tool_name: "AskUserQuestion", session_id: `dcon-${Math.random()}`, transcript_path: transcript, tool_input: { questions: [{ question: "Delete prod DB?", options: opts }] } }, `http://127.0.0.1:${server.address().port}`);
+  server.close();
+  assert.equal(out, ""); // hook stays silent → question goes to the user
+  const d = readFileSync(logFile, "utf8").trim().split("\n").map((l) => JSON.parse(l)).filter((e) => e.kind === "decision").at(-1);
+  assert.equal(d.outcome, "destructive");
+});
+
+test("bidirectional: destructive agreement (low) still lets a confident answer through (no overcorrection)", async () => {
+  const server = await stub(() => ({
+    pick: { choice: "o0", probabilities: { o0: 0.99 } },
+    personal: { probability: 0.05 }, personal__mirror: { probability: 0.95 },
+    destructive: { probability: 0.1 }, destructive__mirror: { probability: 0.9 },
+  }));
+  const out = await runHook({ tool_name: "AskUserQuestion", session_id: `dok-${Math.random()}`, transcript_path: transcript, tool_input: { questions: [{ question: "Rename var?", options: opts }] } }, `http://127.0.0.1:${server.address().port}`);
+  server.close();
+  assert.match(out.hookSpecificOutput.permissionDecisionReason, /"Rename var\?" → A/);
+});
+
+test("bidirectional (safe mode): personal forward/mirror contradiction still defers to the user", async () => {
+  // fwd personal=0.6 (defer), mirror says not-personal (twin=1.0). Symmetric collapse→0.38 would auto-answer a personal matter.
+  const server = await stub(() => ({
+    pick: { choice: "o0", probabilities: { o0: 0.99 } },
+    personal: { probability: 0.6 }, personal__mirror: { probability: 1.0 },
+    destructive: { probability: 0.05 }, destructive__mirror: { probability: 0.95 },
+  }));
+  const out = await runRawEnv({ tool_name: "AskUserQuestion", session_id: `pcon-${Math.random()}`, transcript_path: transcript, tool_input: { questions: [{ question: "Brand color?", options: opts }] } }, `http://127.0.0.1:${server.address().port}`, { ASK_JEV_AUTONOMY: "safe" });
+  server.close();
+  assert.equal(out, ""); // deferred → hook silent, user decides
+  const d = readFileSync(logFile, "utf8").trim().split("\n").map((l) => JSON.parse(l)).filter((e) => e.kind === "decision").at(-1);
+  assert.equal(d.outcome, "personal");
+});

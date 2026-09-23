@@ -39,7 +39,7 @@ async function main() {
   const p = answers.result.probabilities?.[choice] ?? 1;
   logEvent({
     kind: "decision", source: "hook", gate: "bash", outcome: choice, session_id: input.session_id,
-    question: truncate(input.tool_input?.command ?? "", 120),
+    question: truncate(input.tool_input?.command ?? "", 4_000),
     label: choice, confidence: p, reason: truncate(opts[choice]?.what ?? "", 160),
   });
   if (choice !== "success" && p >= 0.8) {

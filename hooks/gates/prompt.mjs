@@ -33,6 +33,7 @@ async function judgePrompt(input) {
     const answers = await askJev(key, state, {
       literal: {
         type: "boolean",
+        safe: false,
         instructions: { question: "Is the most literal reading of this prompt, taken with the current task context, actionable without clarification?", focus: FOCUS },
         criteria: LITERAL,
       },
@@ -42,7 +43,7 @@ async function judgePrompt(input) {
     const label = p >= 0.7 ? "literal" : "assume";
     logEvent({
       kind: "decision", source: "hook", gate: "prompt", session_id: input.session_id, outcome: label,
-      question: truncate(prompt, 120), label, confidence: label === "literal" ? p : 1 - p, reason: truncate(LITERAL[label === "literal"], 160),
+      question: truncate(prompt, 4_000), label, confidence: label === "literal" ? p : 1 - p, reason: truncate(LITERAL[label === "literal"], 160),
     });
     return label === "literal"
       ? "Jev: proceed on the literal reading; state your assumption in one line, do not ask."
@@ -51,14 +52,14 @@ async function judgePrompt(input) {
 
   // safe: giữ hành vi cũ — chỉ cảnh báo mập mờ, không tự quyết thay người.
   const answers = await askJev(key, state, {
-    ambiguous: { type: "boolean", instructions: { question: "Does the latest prompt read as ambiguous?", focus: FOCUS }, criteria: AMBIGUOUS },
+    ambiguous: { type: "boolean", safe: true, instructions: { question: "Does the latest prompt read as ambiguous?", focus: FOCUS }, criteria: AMBIGUOUS },
   }, "gate:prompt", 4000, sizes).catch(() => null);
   const p = answers?.ambiguous?.probability;
   if (p === undefined) return null;
   const label = p >= 0.85 ? "ambiguous" : "clear";
   logEvent({
     kind: "decision", source: "hook", gate: "prompt", session_id: input.session_id, outcome: label,
-    question: truncate(prompt, 120), label, confidence: label === "ambiguous" ? p : 1 - p, reason: truncate(AMBIGUOUS[label === "ambiguous"], 160),
+    question: truncate(prompt, 4_000), label, confidence: label === "ambiguous" ? p : 1 - p, reason: truncate(AMBIGUOUS[label === "ambiguous"], 160),
   });
   return label === "ambiguous" ? "Jev: this request reads as ambiguous — ask one clarifying question before acting." : null;
 }

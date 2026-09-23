@@ -33,12 +33,12 @@ async function main() {
   if (!hasContext(state)) return;
 
   const answers = await askJev(key, state, {
-    incomplete: { type: "boolean", instructions: { question: "Did the assistant stop with work still owed, instead of fully addressing the user's request?", focus: FOCUS }, criteria: INCOMPLETE },
+    incomplete: { type: "boolean", safe: true, instructions: { question: "Did the assistant stop with work still owed, instead of fully addressing the user's request?", focus: FOCUS }, criteria: INCOMPLETE },
   }, "gate:stop", 4000, sizes).catch(() => null);
   const p = answers?.incomplete?.probability;
   if (p === undefined) return;
   const label = p >= 0.5 ? "incomplete" : "complete";
-  const base = { kind: "decision", source: "hook", gate: "stop", session_id: input.session_id, question: truncate(message, 120), label, confidence: label === "incomplete" ? p : 1 - p };
+  const base = { kind: "decision", source: "hook", gate: "stop", session_id: input.session_id, question: truncate(message, 4_000), label, confidence: label === "incomplete" ? p : 1 - p };
   if (p >= 0.85) {
     logEvent({ ...base, outcome: "block", reason: truncate(INCOMPLETE.true, 160) });
     block(`Jev: request looks incomplete (p=${p.toFixed(2)}) — finish it or tell the user what is left.`);
@@ -48,7 +48,7 @@ async function main() {
   if (autonomy() !== "full") return;
   // full: nếu Claude vừa hỏi xin phép/quyết định, Jev trả lời thay — trừ khi destructive hoặc thật sự chỉ người dùng mới quyết được.
   const asked = await askJev(key, state, {
-    asksUser: { type: "boolean", instructions: {
+    asksUser: { type: "boolean", safe: false, instructions: {
       question: "Does the final assistant message end by asking the user a question or for permission (e.g. 'do you want me to…', 'should I…', 'shall I proceed')?", focus: FOCUS },
       criteria: { true: "Ends with a question or permission request to the user", false: "Does not end with a question — it's a statement, a report, or already proceeding" } },
   }, "gate:stop", 4000, sizes).catch(() => null);
@@ -65,7 +65,7 @@ async function main() {
   const pick = choice?.resolve?.choice;
   if (!pick) return;
   const cp = choice.resolve.probabilities?.[pick] ?? 1;
-  logEvent({ kind: "decision", source: "hook", gate: "stop", session_id: input.session_id, question: truncate(message, 120), outcome: pick, label: pick, confidence: cp });
+  logEvent({ kind: "decision", source: "hook", gate: "stop", session_id: input.session_id, question: truncate(message, 4_000), outcome: pick, label: pick, confidence: cp });
 
   if (pick === "yes_proceed" && cp >= 0.8) {
     const n = readCount(input.session_id) + 1;
